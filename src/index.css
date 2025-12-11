@@ -1,0 +1,218 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Halloween Animations */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) translateX(0px);
+  }
+  50% {
+    transform: translateY(-20px) translateX(10px);
+  }
+}
+
+@keyframes fly-across {
+  0% {
+    left: -10%;
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-30px);
+  }
+  100% {
+    left: 110%;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fog {
+  0%, 100% {
+    opacity: 0.2;
+    transform: translateX(0);
+  }
+  50% {
+    opacity: 0.4;
+    transform: translateX(20px);
+  }
+}
+
+@keyframes fog-reverse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translateX(0);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateX(-20px);
+  }
+}
+
+.animate-float {
+  animation: float 8s ease-in-out infinite;
+}
+
+.animate-fly-across {
+  animation: fly-across 15s linear infinite;
+}
+
+.animate-fog {
+  animation: fog 10s ease-in-out infinite;
+}
+
+.animate-fog-reverse {
+  animation: fog-reverse 12s ease-in-out infinite;
+}
+
+/* Christmas Animations */
+@keyframes snowfall {
+  0% {
+    transform: translateY(-100vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(360deg);
+    opacity: 0.5;
+  }
+}
+
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateY(-15px) scale(1.1);
+    opacity: 1;
+  }
+}
+
+.animate-snowfall {
+  animation: snowfall linear infinite;
+}
+
+.animate-float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 15% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 15%;
+
+    /* Schooltrade blue gradient: #3b8bff → #5cc1ff */
+    --primary: 210 100% 61%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 195 100% 62%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 220 15% 15%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 195 100% 62%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 210 100% 61%;
+
+    --radius: 0.75rem;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(210 100% 61%), hsl(195 100% 62%));
+    --gradient-hero: linear-gradient(135deg, hsl(210 100% 61% / 0.1), hsl(195 100% 62% / 0.05));
+    
+    /* Shadows */
+    --shadow-soft: 0 2px 8px hsl(210 100% 61% / 0.1);
+    --shadow-glow: 0 0 20px hsl(195 100% 62% / 0.3);
+  }
+
+  .dark {
+    --background: 220 15% 10%;
+    --foreground: 0 0% 95%;
+
+    --card: 220 15% 12%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 220 15% 12%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 210 100% 61%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 195 100% 62%;
+
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 0 0% 95%;
+
+    --muted: 220 15% 18%;
+    --muted-foreground: 220 9% 60%;
+
+    --accent: 195 100% 62%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 20%;
+    --input: 220 15% 20%;
+    --ring: 210 100% 61%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  /* RTL support for Hebrew */
+  [dir="rtl"] {
+    direction: rtl;
+  }
+}
+
+@layer utilities {
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .animated-premium-username {
+    @apply inline-block;
+    animation: premiumGlow 3s ease-in-out infinite;
+  }
+
+  @keyframes premiumGlow {
+    0%, 100% {
+      text-shadow: 0 0 5px rgba(0, 200, 83, 0.3);
+    }
+    50% {
+      text-shadow: 0 0 15px rgba(0, 200, 83, 0.6), 0 0 25px rgba(0, 200, 83, 0.4);
+    }
+  }
+}
