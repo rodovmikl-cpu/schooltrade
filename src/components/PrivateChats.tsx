@@ -1,14 +1,21 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageCircle, Send, Users, Plus, Bell } from "lucide-react";
+import { MessageCircle, Send, Users, Plus, Bell, Volume2 } from "lucide-react";
 import { AnimatedUsername } from "./AnimatedUsername";
 import { PremiumBadge } from "./PremiumBadge";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface Chat {
   id: string;
@@ -28,6 +35,12 @@ interface Message {
   created_at: string;
 }
 
+interface User {
+  code: string;
+  name: string;
+  is_premium: boolean;
+}
+
 interface PrivateChatsProps {
   userCode: string;
   userName: string;
@@ -41,26 +54,87 @@ const PREMIUM_USERS = ["161221063", "752025692", "468786933"];
 const MAX_CHATS_PER_MONTH = 5;
 const MAX_MESSAGES_PER_SIDE = 5;
 
+// Notification sound (phone ringing style)
+const playNotificationSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    // Create a phone ring-like sound
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+    oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.5);
+  } catch (error) {
+    console.error("Audio notification error:", error);
+  }
+};
+
+// Show browser notification
+const showBrowserNotification = (senderName: string, content: string) => {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(`יש הודעה חדשה ב-SchoolTrade מאת ${senderName}`, {
+      body: content.substring(0, 100),
+      icon: '/favicon.png',
+      tag: 'schooltrade-message',
+    });
+  }
+};
+
+// Request notification permission
+const requestNotificationPermission = async () => {
+  if ('Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+};
+
 export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [newChatCode, setNewChatCode] = useState("");
   const [myMessageCount, setMyMessageCount] = useState(0);
-  const [showNewChatInput, setShowNewChatInput] = useState(false);
+  const [showUserSelection, setShowUserSelection] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [unreadCounts, setUnreadCounts] = useState<UnreadCount>({});
   const [lastReadTimes, setLastReadTimes] = useState<{ [chatId: string]: string }>({});
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const { toast } = useToast();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const isPremiumUser = PREMIUM_USERS.includes(userCode);
   const currentMonth = new Date().toISOString().slice(0, 7);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
 
   // Load last read times from localStorage
   useEffect(() => {
     const saved = localStorage.getItem(`chat-read-times-${userCode}`);
     if (saved) {
-      setLastReadTimes(JSON.parse(saved));
+      try {
+        setLastReadTimes(JSON.parse(saved));
+      } catch (e) {
+        console.error("Error loading last read times:", e);
+      }
+    }
+    
+    const soundPref = localStorage.getItem(`chat-sound-${userCode}`);
+    if (soundPref !== null) {
+      setSoundEnabled(soundPref === 'true');
     }
   }, [userCode]);
 
@@ -71,6 +145,13 @@ export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
     localStorage.setItem(`chat-read-times-${userCode}`, JSON.stringify(newTimes));
   }, [lastReadTimes, userCode]);
 
+  // Toggle sound
+  const toggleSound = () => {
+    const newValue = !soundEnabled;
+    setSoundEnabled(newValue);
+    localStorage.setItem(`chat-sound-${userCode}`, String(newValue));
+  };
+
   // Calculate unread messages for each chat
   const calculateUnreadCounts = useCallback(async (chatList: Chat[]) => {
     const counts: UnreadCount = {};
@@ -78,22 +159,32 @@ export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
     for (const chat of chatList) {
       const lastRead = lastReadTimes[chat.id] || chat.created_at;
       
-      const { count, error } = await supabase
-        .from("private_messages")
-        .select("*", { count: "exact", head: true })
-        .eq("chat_id", chat.id)
-        .neq("sender_code", userCode)
-        .gt("created_at", lastRead);
-      
-      if (!error && count) {
-        counts[chat.id] = count;
-      } else {
+      try {
+        const { count, error } = await supabase
+          .from("private_messages")
+          .select("*", { count: "exact", head: true })
+          .eq("chat_id", chat.id)
+          .neq("sender_code", userCode)
+          .gt("created_at", lastRead);
+        
+        if (!error && count) {
+          counts[chat.id] = count;
+        } else {
+          counts[chat.id] = 0;
+        }
+      } catch (e) {
+        console.error("Error calculating unread:", e);
         counts[chat.id] = 0;
       }
     }
     
     setUnreadCounts(counts);
   }, [lastReadTimes, userCode]);
+
+  // Auto-scroll to bottom of messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   useEffect(() => {
     if (isPremiumUser) {
@@ -137,6 +228,11 @@ export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
           
           // Only notify if message is in one of our chats and not from us
           if (chatIds.includes(newMsg.chat_id) && newMsg.sender_code !== userCode) {
+            // Play notification sound
+            if (soundEnabled) {
+              playNotificationSound();
+            }
+            
             // Update unread count if not in selected chat
             if (!selectedChat || selectedChat.id !== newMsg.chat_id) {
               setUnreadCounts(prev => ({
@@ -144,11 +240,14 @@ export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
                 [newMsg.chat_id]: (prev[newMsg.chat_id] || 0) + 1,
               }));
               
-              // Show toast notification
+              // Show toast notification (WhatsApp style)
               toast({
-                title: `💬 הודעה חדשה מ-${newMsg.sender_name}`,
-                description: newMsg.content.substring(0, 50) + (newMsg.content.length > 50 ? "..." : ""),
+                title: `📱 יש הודעה חדשה ב-SchoolTrade`,
+                description: `מאת ${newMsg.sender_name}: ${newMsg.content.substring(0, 50)}${newMsg.content.length > 50 ? "..." : ""}`,
               });
+              
+              // Show browser notification
+              showBrowserNotification(newMsg.sender_name, newMsg.content);
             } else {
               // If in selected chat, add message and mark as read
               setMessages(prev => [...prev, newMsg]);
@@ -162,67 +261,107 @@ export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [isPremiumUser, chats, selectedChat, userCode, toast, saveLastReadTime]);
+  }, [isPremiumUser, chats, selectedChat, userCode, toast, saveLastReadTime, soundEnabled]);
 
   const loadChats = async () => {
-    const { data, error } = await supabase
-      .from("private_chats")
-      .select("*")
-      .eq("is_active", true)
-      .order("last_message_at", { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from("private_chats")
+        .select("*")
+        .eq("is_active", true)
+        .order("last_message_at", { ascending: false });
 
-    if (error) {
-      console.error("Error loading chats:", error);
-      toast({ title: "שגיאה בטעינת צ'אטים", variant: "destructive" });
-      return;
+      if (error) {
+        console.error("Error loading chats:", error);
+        toast({ title: "שגיאה בטעינת צ'אטים", variant: "destructive" });
+        return;
+      }
+
+      const userChats = (data || []).filter(
+        (chat: Chat) => chat.user1_code === userCode || chat.user2_code === userCode
+      );
+
+      const currentMonthChats = userChats.filter((chat: Chat) => {
+        const chatMonth = chat.created_at.slice(0, 7);
+        return chatMonth === currentMonth;
+      });
+
+      setChats(currentMonthChats);
+    } catch (e) {
+      console.error("Error in loadChats:", e);
     }
+  };
 
-    const userChats = (data || []).filter(
-      (chat: Chat) => chat.user1_code === userCode || chat.user2_code === userCode
-    );
+  const loadAvailableUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("code, name, is_premium")
+        .neq("code", userCode)
+        .order("name");
 
-    const currentMonthChats = userChats.filter((chat: Chat) => {
-      const chatMonth = chat.created_at.slice(0, 7);
-      return chatMonth === currentMonth;
-    });
+      if (error) {
+        console.error("Error loading users:", error);
+        return;
+      }
 
-    setChats(currentMonthChats);
+      // Filter out users we already have chats with
+      const existingChatUserCodes = chats.map(chat => 
+        chat.user1_code === userCode ? chat.user2_code : chat.user1_code
+      );
+
+      const filteredUsers = (data || []).filter(
+        (user: User) => !existingChatUserCodes.includes(user.code)
+      );
+
+      setAvailableUsers(filteredUsers);
+    } catch (e) {
+      console.error("Error in loadAvailableUsers:", e);
+    }
   };
 
   const loadMessages = async (chatId: string) => {
-    const { data, error } = await supabase
-      .from("private_messages")
-      .select("*")
-      .eq("chat_id", chatId)
-      .order("created_at", { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from("private_messages")
+        .select("*")
+        .eq("chat_id", chatId)
+        .order("created_at", { ascending: true });
 
-    if (error) {
-      console.error("Error loading messages:", error);
-      toast({ title: "שגיאה בטעינת הודעות", variant: "destructive" });
-      return;
+      if (error) {
+        console.error("Error loading messages:", error);
+        toast({ title: "שגיאה בטעינת הודעות", variant: "destructive" });
+        return;
+      }
+
+      setMessages(data || []);
+    } catch (e) {
+      console.error("Error in loadMessages:", e);
     }
-
-    setMessages(data || []);
   };
 
   const loadMessageCount = async (chatId: string) => {
-    const { data, error } = await supabase
-      .from("private_chat_limits")
-      .select("message_count")
-      .eq("chat_id", chatId)
-      .eq("user_code", userCode)
-      .eq("month_year", currentMonth)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from("private_chat_limits")
+        .select("message_count")
+        .eq("chat_id", chatId)
+        .eq("user_code", userCode)
+        .eq("month_year", currentMonth)
+        .maybeSingle();
 
-    if (error) {
-      console.error("Error loading message count:", error);
-      return;
+      if (error) {
+        console.error("Error loading message count:", error);
+        return;
+      }
+
+      setMyMessageCount(data?.message_count || 0);
+    } catch (e) {
+      console.error("Error in loadMessageCount:", e);
     }
-
-    setMyMessageCount(data?.message_count || 0);
   };
 
-  const createChat = async () => {
+  const createChatWithUser = async (targetUser: User) => {
     if (!isPremiumUser) {
       toast({ title: "אין לך הרשאה ליצור צ'אטים", variant: "destructive" });
       return;
@@ -236,62 +375,35 @@ export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
       return;
     }
 
-    if (!newChatCode.trim()) {
-      toast({ title: "הזן קוד משתמש", variant: "destructive" });
-      return;
-    }
+    try {
+      const { data: newChat, error } = await supabase
+        .from("private_chats")
+        .insert({
+          user1_code: userCode,
+          user2_code: targetUser.code,
+          user1_name: userName,
+          user2_name: targetUser.name,
+        })
+        .select()
+        .single();
 
-    if (newChatCode === userCode) {
-      toast({ title: "לא ניתן ליצור צ'אט עם עצמך", variant: "destructive" });
-      return;
-    }
+      if (error) {
+        console.error("Error creating chat:", error);
+        toast({ title: "שגיאה ביצירת צ'אט", variant: "destructive" });
+        return;
+      }
 
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("name")
-      .eq("code", newChatCode)
-      .maybeSingle();
-
-    if (userError || !userData) {
-      toast({ title: "משתמש לא נמצא", variant: "destructive" });
-      return;
-    }
-
-    const existingChat = chats.find(
-      chat => 
-        (chat.user1_code === userCode && chat.user2_code === newChatCode) ||
-        (chat.user2_code === userCode && chat.user1_code === newChatCode)
-    );
-
-    if (existingChat) {
-      toast({ title: "צ'אט עם משתמש זה כבר קיים", variant: "destructive" });
-      return;
-    }
-
-    const { data: newChat, error } = await supabase
-      .from("private_chats")
-      .insert({
-        user1_code: userCode,
-        user2_code: newChatCode,
-        user1_name: userName,
-        user2_name: userData.name,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error creating chat:", error);
+      toast({ title: `צ'אט עם ${targetUser.name} נוצר בהצלחה` });
+      setShowUserSelection(false);
+      setSearchQuery("");
+      await loadChats();
+      
+      if (newChat) {
+        setSelectedChat(newChat);
+      }
+    } catch (e) {
+      console.error("Error in createChatWithUser:", e);
       toast({ title: "שגיאה ביצירת צ'אט", variant: "destructive" });
-      return;
-    }
-
-    toast({ title: "צ'אט נוצר בהצלחה" });
-    setNewChatCode("");
-    setShowNewChatInput(false);
-    await loadChats();
-    
-    if (newChat) {
-      setSelectedChat(newChat);
     }
   };
 
@@ -306,55 +418,60 @@ export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
       return;
     }
 
-    const { error: messageError } = await supabase
-      .from("private_messages")
-      .insert({
-        chat_id: selectedChat.id,
-        sender_code: userCode,
-        sender_name: userName,
-        content: newMessage.trim(),
-        month_year: currentMonth,
-      });
-
-    if (messageError) {
-      console.error("Error sending message:", messageError);
-      toast({ title: "שגיאה בשליחת הודעה", variant: "destructive" });
-      return;
-    }
-
-    const { data: existingLimit } = await supabase
-      .from("private_chat_limits")
-      .select("id, message_count")
-      .eq("chat_id", selectedChat.id)
-      .eq("user_code", userCode)
-      .eq("month_year", currentMonth)
-      .maybeSingle();
-
-    if (existingLimit) {
-      await supabase
-        .from("private_chat_limits")
-        .update({ message_count: existingLimit.message_count + 1 })
-        .eq("id", existingLimit.id);
-    } else {
-      await supabase
-        .from("private_chat_limits")
+    try {
+      const { error: messageError } = await supabase
+        .from("private_messages")
         .insert({
           chat_id: selectedChat.id,
-          user_code: userCode,
+          sender_code: userCode,
+          sender_name: userName,
+          content: newMessage.trim(),
           month_year: currentMonth,
-          message_count: 1,
         });
+
+      if (messageError) {
+        console.error("Error sending message:", messageError);
+        toast({ title: "שגיאה בשליחת הודעה", variant: "destructive" });
+        return;
+      }
+
+      const { data: existingLimit } = await supabase
+        .from("private_chat_limits")
+        .select("id, message_count")
+        .eq("chat_id", selectedChat.id)
+        .eq("user_code", userCode)
+        .eq("month_year", currentMonth)
+        .maybeSingle();
+
+      if (existingLimit) {
+        await supabase
+          .from("private_chat_limits")
+          .update({ message_count: existingLimit.message_count + 1 })
+          .eq("id", existingLimit.id);
+      } else {
+        await supabase
+          .from("private_chat_limits")
+          .insert({
+            chat_id: selectedChat.id,
+            user_code: userCode,
+            month_year: currentMonth,
+            message_count: 1,
+          });
+      }
+
+      await supabase
+        .from("private_chats")
+        .update({ last_message_at: new Date().toISOString() })
+        .eq("id", selectedChat.id);
+
+      setNewMessage("");
+      loadMessages(selectedChat.id);
+      setMyMessageCount(prev => prev + 1);
+      loadChats();
+    } catch (e) {
+      console.error("Error in sendMessage:", e);
+      toast({ title: "שגיאה בשליחת הודעה", variant: "destructive" });
     }
-
-    await supabase
-      .from("private_chats")
-      .update({ last_message_at: new Date().toISOString() })
-      .eq("id", selectedChat.id);
-
-    setNewMessage("");
-    loadMessages(selectedChat.id);
-    setMyMessageCount(prev => prev + 1);
-    loadChats();
   };
 
   const getOtherUserName = (chat: Chat) => {
@@ -373,6 +490,11 @@ export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
       year: '2-digit'
     });
   };
+
+  const filteredUsers = availableUsers.filter(user =>
+    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.code.includes(searchQuery)
+  );
 
   const isMessageLimitReached = myMessageCount >= MAX_MESSAGES_PER_SIDE;
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
@@ -404,32 +526,67 @@ export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
                 </Badge>
               )}
             </h3>
-            {chats.length < MAX_CHATS_PER_MONTH && (
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => setShowNewChatInput(!showNewChatInput)}
+            <div className="flex items-center gap-2">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={toggleSound}
+                title={soundEnabled ? "כבה צלילים" : "הפעל צלילים"}
               >
-                <Plus className="w-4 h-4 ml-1" />
-                חדש
+                <Volume2 className={`w-4 h-4 ${soundEnabled ? "text-green-500" : "text-muted-foreground"}`} />
               </Button>
-            )}
-          </div>
-          
-          {showNewChatInput && (
-            <div className="flex gap-2 p-2 bg-muted rounded-lg">
-              <Input
-                placeholder="קוד משתמש"
-                value={newChatCode}
-                onChange={(e) => setNewChatCode(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && createChat()}
-                className="text-sm"
-              />
-              <Button onClick={createChat} size="sm">
-                צור
-              </Button>
+              {chats.length < MAX_CHATS_PER_MONTH && (
+                <Dialog open={showUserSelection} onOpenChange={(open) => {
+                  setShowUserSelection(open);
+                  if (open) loadAvailableUsers();
+                }}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" variant="outline">
+                      <Plus className="w-4 h-4 ml-1" />
+                      חדש
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md" dir="rtl">
+                    <DialogHeader>
+                      <DialogTitle>בחר משתמש לצ'אט חדש</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <Input
+                        placeholder="חפש לפי שם..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                      />
+                      <ScrollArea className="h-[300px]">
+                        <div className="space-y-2">
+                          {filteredUsers.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-8">
+                              לא נמצאו משתמשים
+                            </p>
+                          ) : (
+                            filteredUsers.map((user) => (
+                              <Button
+                                key={user.code}
+                                variant="outline"
+                                className="w-full justify-start"
+                                onClick={() => createChatWithUser(user)}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <AnimatedUsername userCode={user.code}>
+                                    {user.name}
+                                  </AnimatedUsername>
+                                  <PremiumBadge userCode={user.code} />
+                                </div>
+                              </Button>
+                            ))
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         <ScrollArea className="h-[480px]">
@@ -539,6 +696,7 @@ export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
                     </div>
                   ))
                 )}
+                <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
 
