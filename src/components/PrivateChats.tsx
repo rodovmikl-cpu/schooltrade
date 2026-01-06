@@ -50,7 +50,7 @@ interface UnreadCount {
   [chatId: string]: number;
 }
 
-const PREMIUM_USERS = ["161221063", "752025692", "468786933"];
+const PREMIUM_USERS = ["161221063", "752025692", "426671703"];
 const MAX_CHATS_PER_MONTH = 5;
 const MAX_MESSAGES_PER_SIDE = 5;
 

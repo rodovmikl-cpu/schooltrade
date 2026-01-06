@@ -20,7 +20,8 @@ import {
   RefreshCw,
   Coins,
   Skull,
-  Zap
+  Zap,
+  Wallet
 } from "lucide-react";
 
 interface Crypto {
@@ -159,6 +160,8 @@ export const CryptoGame = () => {
   const [selectedCrypto, setSelectedCrypto] = useState<Crypto | null>(null);
   const [buyAmount, setBuyAmount] = useState("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showSellDialog, setShowSellDialog] = useState(false);
+  const [sellAmounts, setSellAmounts] = useState<{ [id: string]: string }>({});
   const [newCryptoName, setNewCryptoName] = useState("");
   const [newCryptoAmount, setNewCryptoAmount] = useState("");
   const [newCryptoPrice, setNewCryptoPrice] = useState("");
@@ -506,6 +509,102 @@ export const CryptoGame = () => {
                 צור מטבע
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Sell Portfolio Dialog */}
+        <Dialog open={showSellDialog} onOpenChange={(open) => {
+          setShowSellDialog(open);
+          if (!open) setSellAmounts({});
+        }}>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20">
+              <Wallet className="w-4 h-4 ml-2" />
+              מכור מטבעות
+            </Button>
+          </DialogTrigger>
+          <DialogContent dir="rtl" className="max-w-md max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Wallet className="w-5 h-5" />
+                מכור מהתיק שלך
+              </DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="h-[400px] pr-4">
+              <div className="space-y-3">
+                {gameState.cryptos.filter(c => (c.owned || 0) > 0).length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8">
+                    אין לך מטבעות למכירה
+                  </div>
+                ) : (
+                  gameState.cryptos
+                    .filter(c => (c.owned || 0) > 0)
+                    .map(crypto => (
+                      <Card key={crypto.id} className="p-4 border-blue-500/20">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <span className="font-bold">{crypto.name}</span>
+                            <span className="text-xs text-muted-foreground mr-2">({crypto.symbol})</span>
+                            {crypto.isCustom && <Badge variant="outline" className="text-purple-500 border-purple-500 mr-2">שלי</Badge>}
+                          </div>
+                          <div className={`text-sm ${crypto.change24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            {crypto.change24h >= 0 ? '+' : ''}{crypto.change24h.toFixed(2)}%
+                          </div>
+                        </div>
+                        <div className="text-sm text-muted-foreground mb-2">
+                          ברשותך: <strong>{crypto.owned}</strong> מטבעות
+                          <br />
+                          מחיר נוכחי: <strong>{formatPrice(crypto.price)}</strong>
+                          <br />
+                          שווי כולל: <strong>{formatPrice(crypto.price * (crypto.owned || 0))}</strong>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                          <Input
+                            type="number"
+                            placeholder="כמות למכירה"
+                            value={sellAmounts[crypto.id] || ""}
+                            onChange={(e) => setSellAmounts(prev => ({ ...prev, [crypto.id]: e.target.value }))}
+                            min="0.01"
+                            max={crypto.owned}
+                            step="0.01"
+                            className="flex-1"
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSellAmounts(prev => ({ ...prev, [crypto.id]: String(crypto.owned) }))}
+                          >
+                            הכל
+                          </Button>
+                        </div>
+                        {sellAmounts[crypto.id] && parseFloat(sellAmounts[crypto.id]) > 0 && (
+                          <div className="mt-2 text-sm text-green-400">
+                            תקבל: {formatPrice(crypto.price * parseFloat(sellAmounts[crypto.id]))}
+                          </div>
+                        )}
+                        <Button
+                          className="w-full mt-2 bg-red-600 hover:bg-red-700"
+                          size="sm"
+                          onClick={() => {
+                            const amount = parseFloat(sellAmounts[crypto.id] || "0");
+                            if (amount > 0 && amount <= (crypto.owned || 0)) {
+                              sellCrypto(crypto, amount);
+                              setSellAmounts(prev => {
+                                const newAmounts = { ...prev };
+                                delete newAmounts[crypto.id];
+                                return newAmounts;
+                              });
+                            }
+                          }}
+                          disabled={!sellAmounts[crypto.id] || parseFloat(sellAmounts[crypto.id]) <= 0 || parseFloat(sellAmounts[crypto.id]) > (crypto.owned || 0)}
+                        >
+                          מכור
+                        </Button>
+                      </Card>
+                    ))
+                )}
+              </div>
+            </ScrollArea>
           </DialogContent>
         </Dialog>
 

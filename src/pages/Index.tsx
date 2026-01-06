@@ -74,7 +74,7 @@ const Index = () => {
   };
 
   const isAdmin = user?.code === "admin" || user?.code === "michaelrodov" || user?.role === "admin";
-  const isPremiumUser = ["161221063", "752025692", "468786933"].includes(user?.code || "");
+  const isPremiumUser = ["161221063", "752025692", "426671703"].includes(user?.code || "");
 
   // Determine background based on active events
   const getBackgroundClass = () => {
