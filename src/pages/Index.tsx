@@ -22,10 +22,11 @@ import { ChristmasDecorations } from "@/components/christmas/ChristmasDecoration
 import { ChristmasCountdown } from "@/components/christmas/ChristmasCountdown";
 import { ChristmasTabs } from "@/components/christmas/ChristmasTabs";
 import { PremiumClubTab } from "@/components/PremiumClubTab";
+import { CryptoGame } from "@/components/games/CryptoGame";
 
 const Index = () => {
   const [user, setUser] = useState<{ code: string; name: string; role: string } | null>(null);
-  const [view, setView] = useState<"login" | "register" | "posts" | "create" | "admin" | "security" | "halloween" | "snake" | "christmas" | "premiumClub">("login");
+  const [view, setView] = useState<"login" | "register" | "posts" | "create" | "admin" | "security" | "halloween" | "snake" | "christmas" | "premiumClub" | "crypto">("login");
   const { isHalloweenActive } = useHalloween();
   const { isChristmasActive, isChristmasBackgroundOnly } = useChristmas();
   const { toast } = useToast();
@@ -222,6 +223,13 @@ const Index = () => {
               >
                 🐍 משחק הנחש
               </Button>
+              <Button
+                variant={view === "crypto" ? "default" : "outline"}
+                onClick={() => setView("crypto")}
+                className="flex-1 min-w-[140px] bg-green-500/20 hover:bg-green-500/30 border-green-500/50"
+              >
+                💰 קריפטו־גיים
+              </Button>
               {isPremiumUser && (
                 <Button
                   variant={view === "premiumClub" ? "default" : "outline"}
@@ -241,6 +249,7 @@ const Index = () => {
             {view === "halloween" && isHalloweenActive && <HalloweenTabs />}
             {view === "christmas" && isChristmasActive && <ChristmasTabs />}
             {view === "snake" && <SnakeGame />}
+            {view === "crypto" && <CryptoGame />}
             {view === "premiumClub" && isPremiumUser && <PremiumClubTab userCode={user.code} userName={user.name} />}
           </div>
         )}
