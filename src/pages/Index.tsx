@@ -23,14 +23,59 @@ import { ChristmasCountdown } from "@/components/christmas/ChristmasCountdown";
 import { ChristmasTabs } from "@/components/christmas/ChristmasTabs";
 import { PremiumClubTab } from "@/components/PremiumClubTab";
 import { CryptoGame } from "@/components/games/CryptoGame";
+import { LimitedChatTab } from "@/components/LimitedChatTab";
+import { Badge } from "@/components/ui/badge";
+
+const PREMIUM_USERS = ["161221063", "752025692", "426671703"];
 
 const Index = () => {
   const [user, setUser] = useState<{ code: string; name: string; role: string } | null>(null);
-  const [view, setView] = useState<"login" | "register" | "posts" | "create" | "admin" | "security" | "halloween" | "snake" | "christmas" | "premiumClub" | "crypto">("login");
+  const [view, setView] = useState<"login" | "register" | "posts" | "create" | "admin" | "security" | "halloween" | "snake" | "christmas" | "premiumClub" | "crypto" | "limitedChat">("login");
+  const [hasLimitedChat, setHasLimitedChat] = useState(false);
+  const [unreadLimitedChat, setUnreadLimitedChat] = useState(0);
   const { isHalloweenActive } = useHalloween();
   const { isChristmasActive, isChristmasBackgroundOnly } = useChristmas();
   const { toast } = useToast();
   const logoImage = useTemporaryLogo();
+
+  // Check for limited chat access for non-premium users
+  const checkLimitedChat = async (userCode: string) => {
+    if (PREMIUM_USERS.includes(userCode)) {
+      setHasLimitedChat(false);
+      return;
+    }
+
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const { data, error } = await supabase
+        .from("private_chats")
+        .select("id")
+        .eq("is_active", true)
+        .or(`user1_code.eq.${userCode},user2_code.eq.${userCode}`)
+        .gte("created_at", `${currentMonth}-01`);
+
+      if (!error && data && data.length > 0) {
+        setHasLimitedChat(true);
+        
+        // Check for unread messages
+        const lastRead = localStorage.getItem(`limited-chat-read-${userCode}`);
+        const lastReadTime = lastRead || new Date(0).toISOString();
+        
+        const { count } = await supabase
+          .from("private_messages")
+          .select("*", { count: "exact", head: true })
+          .in("chat_id", data.map(c => c.id))
+          .neq("sender_code", userCode)
+          .gt("created_at", lastReadTime);
+        
+        setUnreadLimitedChat(count || 0);
+      } else {
+        setHasLimitedChat(false);
+      }
+    } catch (e) {
+      console.error("Error checking limited chat:", e);
+    }
+  };
 
   useEffect(() => {
     // Check if user is stored in session
@@ -41,6 +86,7 @@ const Index = () => {
     if (savedCode && savedName) {
       setUser({ code: savedCode, name: savedName, role: savedRole || "user" });
       setView("posts");
+      checkLimitedChat(savedCode);
     }
   }, []);
 
@@ -62,6 +108,7 @@ const Index = () => {
     sessionStorage.setItem("userName", name);
     sessionStorage.setItem("userRole", role);
     setView("posts");
+    checkLimitedChat(code);
   };
 
   const handleLogout = () => {
@@ -239,6 +286,25 @@ const Index = () => {
                   🌟 חבר מועדון
                 </Button>
               )}
+              {/* Limited Chat Tab for non-premium users who received a chat invite */}
+              {!isPremiumUser && hasLimitedChat && (
+                <Button
+                  variant={view === "limitedChat" ? "default" : "outline"}
+                  onClick={() => {
+                    setView("limitedChat");
+                    setUnreadLimitedChat(0);
+                    localStorage.setItem(`limited-chat-read-${user.code}`, new Date().toISOString());
+                  }}
+                  className="flex-1 min-w-[140px] bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 relative"
+                >
+                  💬 צ'אט פרטי
+                  {unreadLimitedChat > 0 && (
+                    <Badge variant="destructive" className="absolute -top-2 -right-2 animate-pulse">
+                      {unreadLimitedChat}
+                    </Badge>
+                  )}
+                </Button>
+              )}
             </div>
 
             {/* Content */}
@@ -249,8 +315,9 @@ const Index = () => {
             {view === "halloween" && isHalloweenActive && <HalloweenTabs />}
             {view === "christmas" && isChristmasActive && <ChristmasTabs />}
             {view === "snake" && <SnakeGame />}
-            {view === "crypto" && <CryptoGame />}
+            {view === "crypto" && <CryptoGame userCode={user.code} />}
             {view === "premiumClub" && isPremiumUser && <PremiumClubTab userCode={user.code} userName={user.name} />}
+            {view === "limitedChat" && !isPremiumUser && hasLimitedChat && <LimitedChatTab userCode={user.code} userName={user.name} />}
           </div>
         )}
       </main>
