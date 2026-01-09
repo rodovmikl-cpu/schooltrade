@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -21,8 +21,16 @@ import {
   Coins,
   Skull,
   Zap,
-  Wallet
+  Wallet,
+  Rocket
 } from "lucide-react";
+
+// Creator codes with higher spike chance
+const CREATOR_CODES = ["426671703"];
+
+interface CryptoGameProps {
+  userCode?: string;
+}
 
 interface Crypto {
   id: string;
@@ -155,7 +163,7 @@ const initializeCryptos = (): Crypto[] => {
   return all.sort((a, b) => a.price - b.price);
 };
 
-export const CryptoGame = () => {
+export const CryptoGame = ({ userCode }: CryptoGameProps) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selectedCrypto, setSelectedCrypto] = useState<Crypto | null>(null);
   const [buyAmount, setBuyAmount] = useState("");
@@ -166,7 +174,11 @@ export const CryptoGame = () => {
   const [newCryptoAmount, setNewCryptoAmount] = useState("");
   const [newCryptoPrice, setNewCryptoPrice] = useState("");
   const [filter, setFilter] = useState<"all" | "real" | "fictional" | "owned">("all");
+  const [spikeAnimation, setSpikeAnimation] = useState<{ id: string; name: string; multiplier: number } | null>(null);
+  const spikeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+
+  const isCreator = userCode && CREATOR_CODES.includes(userCode);
 
   // Load game state from localStorage
   useEffect(() => {
@@ -207,10 +219,28 @@ export const CryptoGame = () => {
     setGameState(prev => {
       if (!prev) return prev;
 
+      // Check for extreme spike event
+      const spikeChance = isCreator ? 0.01 : 0.001; // 1% for creators, 0.1% for regular users
+      const ownedCryptos = prev.cryptos.filter(c => (c.owned || 0) > 0);
+      
+      let triggeredSpike: { id: string; name: string; multiplier: number } | null = null;
+
       const updatedCryptos = prev.cryptos.map(crypto => {
-        // More volatile price changes for higher risk/reward
-        const volatility = crypto.price > 10000 ? 0.3 : crypto.price > 100 ? 0.2 : 0.15;
-        const change = (Math.random() - 0.5) * volatility * 2;
+        // Check for extreme spike on owned cryptos
+        if ((crypto.owned || 0) > 0 && Math.random() < spikeChance) {
+          const spikeMultiplier = 20000; // +2,000,000% = price * 20000
+          triggeredSpike = { id: crypto.id, name: crypto.name, multiplier: spikeMultiplier };
+          return {
+            ...crypto,
+            price: crypto.price * spikeMultiplier,
+            change24h: 2000000,
+          };
+        }
+
+        // Slightly increased profit chance (more positive bias)
+        const volatility = crypto.price > 10000 ? 0.35 : crypto.price > 100 ? 0.25 : 0.18;
+        const bias = 0.02; // Slight positive bias for profit
+        const change = (Math.random() - 0.5 + bias) * volatility * 2;
         const newPrice = Math.max(0.0001, crypto.price * (1 + change));
         
         // Small chance of crash for expensive coins
@@ -226,12 +256,38 @@ export const CryptoGame = () => {
         };
       });
 
+      // Trigger spike animation if one occurred
+      if (triggeredSpike) {
+        setSpikeAnimation(triggeredSpike);
+        if (spikeTimeoutRef.current) {
+          clearTimeout(spikeTimeoutRef.current);
+        }
+        spikeTimeoutRef.current = setTimeout(() => {
+          setSpikeAnimation(null);
+        }, 5000);
+      }
+
       return {
         ...prev,
         cryptos: updatedCryptos,
+        history: triggeredSpike 
+          ? [
+              { action: `🚀 ספייק קיצוני! ${triggeredSpike.name} עלה ב-+2,000,000%!`, timestamp: Date.now() },
+              ...prev.history.slice(0, 49),
+            ]
+          : prev.history,
       };
     });
-  }, [gameState]);
+  }, [gameState, isCreator]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (spikeTimeoutRef.current) {
+        clearTimeout(spikeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Update prices every 5 seconds
   useEffect(() => {
@@ -417,6 +473,19 @@ export const CryptoGame = () => {
 
   return (
     <div className="space-y-6" dir="rtl">
+      {/* Extreme Spike Animation */}
+      {spikeAnimation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 animate-pulse pointer-events-none">
+          <div className="text-center p-8 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border-2 border-yellow-500 animate-bounce">
+            <Rocket className="w-24 h-24 mx-auto text-yellow-400 animate-pulse mb-4" />
+            <h2 className="text-4xl font-bold text-yellow-400 mb-2">🚀 ספייק קיצוני! 🚀</h2>
+            <p className="text-2xl text-yellow-300">{spikeAnimation.name}</p>
+            <p className="text-5xl font-bold text-green-400 mt-4">+2,000,000%</p>
+            <p className="text-lg text-muted-foreground mt-2">המטבע שלך זינק לשמיים!</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="text-center">
         <h2 className="text-3xl font-bold text-green-500 mb-2 flex items-center justify-center gap-2">
@@ -425,6 +494,11 @@ export const CryptoGame = () => {
           <Zap className="w-8 h-8" />
         </h2>
         <p className="text-muted-foreground">סחר במטבעות קריפטו וירטואליים!</p>
+        {isCreator && (
+          <Badge variant="outline" className="mt-2 border-yellow-500 text-yellow-500">
+            יוצר - סיכוי ספייק גבוה יותר
+          </Badge>
+        )}
       </div>
 
       {/* Stats */}
