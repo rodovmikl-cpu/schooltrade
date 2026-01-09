@@ -132,7 +132,7 @@ export const LimitedChatTab = ({ userCode, userName }: LimitedChatTabProps) => {
     if (!chat) return;
 
     const channel = supabase
-      .channel("limited-chat-messages")
+      .channel(`limited-chat-messages-${chat.id}`)
       .on(
         "postgres_changes",
         {
@@ -143,16 +143,23 @@ export const LimitedChatTab = ({ userCode, userName }: LimitedChatTabProps) => {
         },
         (payload) => {
           const newMsg = payload.new as Message;
-          if (newMsg.sender_code !== userCode) {
-            if (soundEnabled) {
-              playNotificationSound();
+          // Only add if not already in messages (avoid duplicates)
+          setMessages(prev => {
+            if (prev.some(m => m.id === newMsg.id)) {
+              return prev;
             }
-            toast({
-              title: `📱 הודעה חדשה מ-${newMsg.sender_name}`,
-              description: newMsg.content.substring(0, 50),
-            });
-          }
-          setMessages(prev => [...prev, newMsg]);
+            // Play sound and show notification for messages from others
+            if (newMsg.sender_code !== userCode) {
+              if (soundEnabled) {
+                playNotificationSound();
+              }
+              toast({
+                title: `📱 הודעה חדשה מ-${newMsg.sender_name}`,
+                description: newMsg.content.substring(0, 50),
+              });
+            }
+            return [...prev, newMsg];
+          });
         }
       )
       .subscribe();
