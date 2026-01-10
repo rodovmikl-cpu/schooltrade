@@ -333,11 +333,11 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
 
   const initializeNewGame = () => {
     setGameState({
-      balance: 1,
+      balance: 20,
       cryptos: initializeCryptos(),
       portfolio: {},
       totalInvested: 0,
-      history: [{ action: "משחק התחיל עם $1", timestamp: Date.now() }],
+      history: [{ action: "משחק התחיל עם $20", timestamp: Date.now() }],
     });
   };
 
@@ -697,8 +697,8 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
   }
 
   const totalValue = gameState.balance + getPortfolioValue();
-  const profit = totalValue - 1;
-  const profitPercent = profit * 100;
+  const profit = totalValue - 20; // Starting balance is now $20
+  const profitPercent = (profit / 20) * 100; // Percentage based on starting balance
 
   // Format time remaining
   const formatTimeRemaining = (ms: number) => {
