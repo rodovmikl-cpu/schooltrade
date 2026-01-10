@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -22,11 +22,20 @@ import {
   Skull,
   Zap,
   Wallet,
-  Rocket
+  Rocket,
+  Flame,
+  Crown,
+  Sparkles,
+  Star
 } from "lucide-react";
 
 // Creator codes with higher spike chance
 const CREATOR_CODES = ["426671703"];
+
+// 24-Hour Major Event Configuration
+const EVENT_START_TIME = Date.now(); // Event starts on deployment
+const EVENT_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const EVENT_STORAGE_KEY = "crypto-major-event-data";
 
 interface CryptoGameProps {
   userCode?: string;
@@ -41,6 +50,7 @@ interface Crypto {
   isReal: boolean;
   owned: number;
   isCustom?: boolean;
+  preEventPrice?: number; // Store price before event started
 }
 
 interface GameState {
@@ -51,7 +61,56 @@ interface GameState {
   history: { action: string; timestamp: number }[];
 }
 
+interface EventData {
+  startTime: number;
+  preEventPrices: { [id: string]: number };
+  eventActive: boolean;
+}
+
 const STORAGE_KEY = "crypto-game-state";
+
+// Sound effects using Web Audio API
+const playEventSound = (type: 'start' | 'surge' | 'massive') => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    if (type === 'start') {
+      // Epic start sound - rising sweep
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.5);
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.8);
+    } else if (type === 'surge') {
+      // Surge sound - quick ascending
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + 0.15);
+      gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.2);
+    } else if (type === 'massive') {
+      // Massive spike - powerful chord
+      oscillator.type = 'sawtooth';
+      oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(1500, audioContext.currentTime + 0.3);
+      gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.6);
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.6);
+    }
+  } catch (e) {
+    console.log('Audio not supported');
+  }
+};
 
 // Top 10 real cryptocurrencies (Hebrew names)
 const REAL_CRYPTOS: Omit<Crypto, "id" | "change24h" | "owned">[] = [
@@ -175,10 +234,79 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
   const [newCryptoPrice, setNewCryptoPrice] = useState("");
   const [filter, setFilter] = useState<"all" | "real" | "fictional" | "owned">("all");
   const [spikeAnimation, setSpikeAnimation] = useState<{ id: string; name: string; multiplier: number } | null>(null);
+  const [eventData, setEventData] = useState<EventData | null>(null);
+  const [surgeAnimation, setSurgeAnimation] = useState<{ name: string; change: number } | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const spikeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const surgeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const eventSoundPlayedRef = useRef<boolean>(false);
   const { toast } = useToast();
 
   const isCreator = userCode && CREATOR_CODES.includes(userCode);
+
+  // Check if major event is active
+  const isEventActive = useMemo(() => {
+    if (!eventData) return false;
+    const now = Date.now();
+    return eventData.eventActive && (now - eventData.startTime) < EVENT_DURATION_MS;
+  }, [eventData]);
+
+  // Initialize and manage event data
+  useEffect(() => {
+    const savedEventData = localStorage.getItem(EVENT_STORAGE_KEY);
+    if (savedEventData) {
+      try {
+        const parsed = JSON.parse(savedEventData) as EventData;
+        const now = Date.now();
+        // Check if event expired and needs cleanup
+        if (now - parsed.startTime >= EVENT_DURATION_MS && parsed.eventActive) {
+          // Event just ended - trigger cleanup with guaranteed +1% on next price update
+          setEventData({ ...parsed, eventActive: false });
+          localStorage.setItem(EVENT_STORAGE_KEY, JSON.stringify({ ...parsed, eventActive: false }));
+        } else {
+          setEventData(parsed);
+        }
+      } catch (e) {
+        console.error("Error loading event data:", e);
+      }
+    } else {
+      // Initialize new event
+      const newEventData: EventData = {
+        startTime: EVENT_START_TIME,
+        preEventPrices: {},
+        eventActive: true
+      };
+      setEventData(newEventData);
+      localStorage.setItem(EVENT_STORAGE_KEY, JSON.stringify(newEventData));
+    }
+  }, []);
+
+  // Update time remaining countdown
+  useEffect(() => {
+    if (!eventData || !isEventActive) return;
+    
+    const updateTimer = () => {
+      const elapsed = Date.now() - eventData.startTime;
+      const remaining = Math.max(0, EVENT_DURATION_MS - elapsed);
+      setTimeRemaining(remaining);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [eventData, isEventActive]);
+
+  // Play event start sound once
+  useEffect(() => {
+    if (isEventActive && !eventSoundPlayedRef.current) {
+      eventSoundPlayedRef.current = true;
+      playEventSound('start');
+      toast({
+        title: "🔥 אירוע מג'ור התחיל! 🔥",
+        description: "24 שעות של הזדמנויות מטורפות!",
+      });
+    }
+  }, [isEventActive, toast]);
 
   // Load game state from localStorage
   useEffect(() => {
@@ -216,20 +344,49 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
   const updatePrices = useCallback(() => {
     if (!gameState) return;
 
+    // Store pre-event prices when event starts
+    if (isEventActive && eventData && Object.keys(eventData.preEventPrices).length === 0) {
+      const preEventPrices: { [id: string]: number } = {};
+      gameState.cryptos.forEach(c => {
+        preEventPrices[c.id] = c.price;
+      });
+      const updatedEventData = { ...eventData, preEventPrices };
+      setEventData(updatedEventData);
+      localStorage.setItem(EVENT_STORAGE_KEY, JSON.stringify(updatedEventData));
+    }
+
+    // Check if event just ended - apply guaranteed +1% boost
+    const now = Date.now();
+    const eventJustEnded = eventData && eventData.eventActive && 
+      (now - eventData.startTime) >= EVENT_DURATION_MS;
+
     setGameState(prev => {
       if (!prev) return prev;
 
       // Check for extreme spike event
       const spikeChance = isCreator ? 0.01 : 0.001; // 1% for creators, 0.1% for regular users
-      const ownedCryptos = prev.cryptos.filter(c => (c.owned || 0) > 0);
       
       let triggeredSpike: { id: string; name: string; multiplier: number } | null = null;
+      let triggeredSurge: { name: string; change: number } | null = null;
 
       const updatedCryptos = prev.cryptos.map(crypto => {
+        // If event just ended, guarantee +1% above pre-event price
+        if (eventJustEnded && eventData?.preEventPrices[crypto.id]) {
+          const preEventPrice = eventData.preEventPrices[crypto.id];
+          const minEndPrice = preEventPrice * 1.01; // At least +1%
+          const finalPrice = Math.max(crypto.price, minEndPrice);
+          return {
+            ...crypto,
+            price: finalPrice,
+            change24h: ((finalPrice - crypto.price) / crypto.price) * 100,
+          };
+        }
+
         // Check for extreme spike on owned cryptos
         if ((crypto.owned || 0) > 0 && Math.random() < spikeChance) {
           const spikeMultiplier = 20000; // +2,000,000% = price * 20000
           triggeredSpike = { id: crypto.id, name: crypto.name, multiplier: spikeMultiplier };
+          playEventSound('massive');
           return {
             ...crypto,
             price: crypto.price * spikeMultiplier,
@@ -237,7 +394,49 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
           };
         }
 
-        // Slightly increased profit chance (more positive bias)
+        // MAJOR EVENT BEHAVIOR - significantly boosted gains
+        if (isEventActive) {
+          // During event: much higher volatility and positive bias
+          const eventVolatility = crypto.price > 10000 ? 0.6 : crypto.price > 100 ? 0.45 : 0.35;
+          const eventBias = 0.15; // Strong positive bias for event
+          const change = (Math.random() - 0.5 + eventBias) * eventVolatility * 2;
+          
+          // Higher chance of major surge during event
+          const surgeChance = 0.08; // 8% chance of surge each update
+          const isSurge = Math.random() < surgeChance;
+          
+          if (isSurge) {
+            const surgeMultiplier = 1 + (Math.random() * 2 + 0.5); // +50% to +250%
+            const surgedPrice = crypto.price * surgeMultiplier;
+            const surgeChange = (surgeMultiplier - 1) * 100;
+            
+            if (surgeChange > 100 && !triggeredSurge) {
+              triggeredSurge = { name: crypto.name, change: surgeChange };
+              playEventSound('surge');
+            }
+            
+            return {
+              ...crypto,
+              price: surgedPrice,
+              change24h: surgeChange,
+            };
+          }
+          
+          // Reduced crash chance during event
+          const crashChance = crypto.price > 50000 ? 0.005 : 0.002;
+          const isCrash = Math.random() < crashChance;
+          
+          const newPrice = Math.max(0.0001, crypto.price * (1 + change));
+          const finalPrice = isCrash ? crypto.price * (0.7 + Math.random() * 0.2) : newPrice;
+          
+          return {
+            ...crypto,
+            price: finalPrice,
+            change24h: ((finalPrice - crypto.price) / crypto.price) * 100,
+          };
+        }
+
+        // Normal behavior (outside event)
         const volatility = crypto.price > 10000 ? 0.35 : crypto.price > 100 ? 0.25 : 0.18;
         const bias = 0.02; // Slight positive bias for profit
         const change = (Math.random() - 0.5 + bias) * volatility * 2;
@@ -267,6 +466,28 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
         }, 5000);
       }
 
+      // Trigger surge animation if one occurred
+      if (triggeredSurge) {
+        setSurgeAnimation(triggeredSurge);
+        if (surgeTimeoutRef.current) {
+          clearTimeout(surgeTimeoutRef.current);
+        }
+        surgeTimeoutRef.current = setTimeout(() => {
+          setSurgeAnimation(null);
+        }, 2000);
+      }
+
+      // Handle event end
+      if (eventJustEnded && eventData) {
+        const endedEventData = { ...eventData, eventActive: false };
+        setEventData(endedEventData);
+        localStorage.setItem(EVENT_STORAGE_KEY, JSON.stringify(endedEventData));
+        toast({
+          title: "✨ האירוע הסתיים!",
+          description: "כל המטבעות סיימו לפחות +1% מעל המחיר ההתחלתי!",
+        });
+      }
+
       return {
         ...prev,
         cryptos: updatedCryptos,
@@ -275,16 +496,24 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
               { action: `🚀 ספייק קיצוני! ${triggeredSpike.name} עלה ב-+2,000,000%!`, timestamp: Date.now() },
               ...prev.history.slice(0, 49),
             ]
+          : triggeredSurge
+          ? [
+              { action: `🔥 זינוק! ${triggeredSurge.name} עלה ב-+${triggeredSurge.change.toFixed(0)}%!`, timestamp: Date.now() },
+              ...prev.history.slice(0, 49),
+            ]
           : prev.history,
       };
     });
-  }, [gameState, isCreator]);
+  }, [gameState, isCreator, isEventActive, eventData, toast]);
 
-  // Cleanup timeout on unmount
+  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (spikeTimeoutRef.current) {
         clearTimeout(spikeTimeoutRef.current);
+      }
+      if (surgeTimeoutRef.current) {
+        clearTimeout(surgeTimeoutRef.current);
       }
     };
   }, []);
@@ -471,27 +700,120 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
   const profit = totalValue - 1;
   const profitPercent = profit * 100;
 
+  // Format time remaining
+  const formatTimeRemaining = (ms: number) => {
+    const hours = Math.floor(ms / (1000 * 60 * 60));
+    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((ms % (1000 * 60)) / 1000);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className="space-y-6" dir="rtl">
-      {/* Extreme Spike Animation */}
-      {spikeAnimation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 animate-pulse pointer-events-none">
-          <div className="text-center p-8 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border-2 border-yellow-500 animate-bounce">
-            <Rocket className="w-24 h-24 mx-auto text-yellow-400 animate-pulse mb-4" />
-            <h2 className="text-4xl font-bold text-yellow-400 mb-2">🚀 ספייק קיצוני! 🚀</h2>
-            <p className="text-2xl text-yellow-300">{spikeAnimation.name}</p>
-            <p className="text-5xl font-bold text-green-400 mt-4">+2,000,000%</p>
-            <p className="text-lg text-muted-foreground mt-2">המטבע שלך זינק לשמיים!</p>
+    <div className={`space-y-6 relative ${isEventActive ? 'min-h-screen' : ''}`} dir="rtl">
+      {/* Major Event Dark Overlay & Effects */}
+      {isEventActive && (
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-900/20 via-transparent to-red-900/20" />
+          {/* Animated particles */}
+          <div className="absolute inset-0 overflow-hidden">
+            {[...Array(20)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute w-1 h-1 bg-orange-400 rounded-full animate-pulse"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 2}s`,
+                  animationDuration: `${1 + Math.random() * 2}s`,
+                  opacity: 0.3 + Math.random() * 0.5,
+                }}
+              />
+            ))}
           </div>
         </div>
       )}
 
+      {/* Surge Animation */}
+      {surgeAnimation && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-fade-in">
+          <div className="px-6 py-3 rounded-full bg-gradient-to-r from-orange-600 to-red-600 border-2 border-orange-400 shadow-lg shadow-orange-500/50">
+            <div className="flex items-center gap-2 text-white font-bold">
+              <Flame className="w-5 h-5 animate-pulse" />
+              <span>{surgeAnimation.name}: +{surgeAnimation.change.toFixed(0)}%</span>
+              <TrendingUp className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Extreme Spike Animation */}
+      {spikeAnimation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 pointer-events-none">
+          <div className="absolute inset-0 bg-gradient-to-br from-yellow-900/30 via-orange-900/20 to-red-900/30 animate-pulse" />
+          <div className="text-center p-8 rounded-2xl bg-gradient-to-br from-yellow-500/30 to-orange-500/30 border-2 border-yellow-400 animate-scale-in relative z-10 shadow-2xl shadow-yellow-500/50">
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-yellow-400/20 to-transparent animate-pulse" />
+            <Rocket className="w-32 h-32 mx-auto text-yellow-400 mb-4 animate-bounce" style={{ filter: 'drop-shadow(0 0 20px rgba(250, 204, 21, 0.8))' }} />
+            <h2 className="text-5xl font-bold text-yellow-400 mb-2" style={{ textShadow: '0 0 30px rgba(250, 204, 21, 0.8)' }}>🚀 ספייק קיצוני! 🚀</h2>
+            <p className="text-3xl text-yellow-300">{spikeAnimation.name}</p>
+            <p className="text-6xl font-bold text-green-400 mt-4" style={{ textShadow: '0 0 30px rgba(34, 197, 94, 0.8)' }}>+2,000,000%</p>
+            <p className="text-xl text-muted-foreground mt-2">המטבע שלך זינק לשמיים!</p>
+            <div className="mt-4 flex justify-center gap-2">
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} className="w-8 h-8 text-yellow-400 animate-pulse" style={{ animationDelay: `${i * 0.1}s` }} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Major Event Banner */}
+      {isEventActive && (
+        <Card className="relative overflow-hidden p-6 bg-gradient-to-br from-orange-950/90 via-red-950/80 to-amber-950/90 border-2 border-orange-500/50 shadow-lg shadow-orange-500/20 z-10">
+          <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 via-transparent to-red-500/10 animate-pulse" />
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500" />
+          
+          <div className="relative z-10 text-center">
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <Flame className="w-8 h-8 text-orange-400 animate-pulse" />
+              <Crown className="w-10 h-10 text-yellow-400" style={{ filter: 'drop-shadow(0 0 10px rgba(250, 204, 21, 0.6))' }} />
+              <Flame className="w-8 h-8 text-orange-400 animate-pulse" />
+            </div>
+            <h3 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 bg-clip-text text-transparent mb-2">
+              🔥 אירוע מג'ור - 24 שעות! 🔥
+            </h3>
+            <p className="text-orange-200 mb-4 text-lg">רווחים מוגברים, זינוקים מטורפים, סיכוי גבוה לעליות!</p>
+            
+            <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-black/50 border border-orange-500/50">
+              <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" />
+              <span className="text-2xl font-mono font-bold text-orange-300">{formatTimeRemaining(timeRemaining)}</span>
+              <span className="text-orange-400 text-sm">נותרו</span>
+            </div>
+            
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <Badge className="bg-green-500/20 text-green-400 border-green-500/50">
+                <TrendingUp className="w-3 h-3 ml-1" />
+                סיכוי רווח גבוה
+              </Badge>
+              <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/50">
+                <Zap className="w-3 h-3 ml-1" />
+                זינוקים מטורפים
+              </Badge>
+              <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/50">
+                <Star className="w-3 h-3 ml-1" />
+                סיום מובטח +1%
+              </Badge>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Header */}
-      <div className="text-center">
-        <h2 className="text-3xl font-bold text-green-500 mb-2 flex items-center justify-center gap-2">
-          <Zap className="w-8 h-8" />
+      <div className="text-center relative z-10">
+        <h2 className={`text-3xl font-bold mb-2 flex items-center justify-center gap-2 ${isEventActive ? 'text-orange-400' : 'text-green-500'}`}>
+          {isEventActive ? <Flame className="w-8 h-8 animate-pulse" /> : <Zap className="w-8 h-8" />}
           קריפטו־גיים
-          <Zap className="w-8 h-8" />
+          {isEventActive ? <Flame className="w-8 h-8 animate-pulse" /> : <Zap className="w-8 h-8" />}
         </h2>
         <p className="text-muted-foreground">סחר במטבעות קריפטו וירטואליים!</p>
         {isCreator && (
@@ -502,20 +824,23 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-4 bg-gradient-to-br from-green-900/50 to-green-950/50 border-green-500/30">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
+        <Card className={`p-4 ${isEventActive ? 'bg-gradient-to-br from-green-900/70 to-green-950/70 border-green-400/50 shadow-lg shadow-green-500/10' : 'bg-gradient-to-br from-green-900/50 to-green-950/50 border-green-500/30'}`}>
           <div className="text-sm text-muted-foreground">יתרה</div>
           <div className="text-2xl font-bold text-green-400">{formatPrice(gameState.balance)}</div>
         </Card>
-        <Card className="p-4 bg-gradient-to-br from-blue-900/50 to-blue-950/50 border-blue-500/30">
+        <Card className={`p-4 ${isEventActive ? 'bg-gradient-to-br from-blue-900/70 to-blue-950/70 border-blue-400/50 shadow-lg shadow-blue-500/10' : 'bg-gradient-to-br from-blue-900/50 to-blue-950/50 border-blue-500/30'}`}>
           <div className="text-sm text-muted-foreground">ערך תיק</div>
           <div className="text-2xl font-bold text-blue-400">{formatPrice(getPortfolioValue())}</div>
         </Card>
-        <Card className="p-4 bg-gradient-to-br from-purple-900/50 to-purple-950/50 border-purple-500/30">
+        <Card className={`p-4 ${isEventActive ? 'bg-gradient-to-br from-purple-900/70 to-purple-950/70 border-purple-400/50 shadow-lg shadow-purple-500/10' : 'bg-gradient-to-br from-purple-900/50 to-purple-950/50 border-purple-500/30'}`}>
           <div className="text-sm text-muted-foreground">סה"כ</div>
           <div className="text-2xl font-bold text-purple-400">{formatPrice(totalValue)}</div>
         </Card>
-        <Card className={`p-4 ${profit >= 0 ? 'bg-gradient-to-br from-emerald-900/50 to-emerald-950/50 border-emerald-500/30' : 'bg-gradient-to-br from-red-900/50 to-red-950/50 border-red-500/30'}`}>
+        <Card className={`p-4 ${profit >= 0 
+          ? (isEventActive ? 'bg-gradient-to-br from-emerald-900/70 to-emerald-950/70 border-emerald-400/50 shadow-lg shadow-emerald-500/10' : 'bg-gradient-to-br from-emerald-900/50 to-emerald-950/50 border-emerald-500/30')
+          : (isEventActive ? 'bg-gradient-to-br from-red-900/70 to-red-950/70 border-red-400/50 shadow-lg shadow-red-500/10' : 'bg-gradient-to-br from-red-900/50 to-red-950/50 border-red-500/30')
+        }`}>
           <div className="text-sm text-muted-foreground">רווח/הפסד</div>
           <div className={`text-2xl font-bold flex items-center gap-1 ${profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
             {profit >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
@@ -525,7 +850,7 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
       </div>
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 relative z-10">
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
             <Button variant="outline" className="border-green-500/50 text-green-400 hover:bg-green-500/20">
