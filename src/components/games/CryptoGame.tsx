@@ -32,6 +32,11 @@ import {
 // Creator codes with higher spike chance
 const CREATOR_CODES = ["426671703"];
 
+// Special bonus codes - users who get $10 million bonus
+const SPECIAL_BONUS_CODES = ["426671703", "322423534"];
+const BONUS_AMOUNT = 10000000; // $10 million
+const BONUS_STORAGE_KEY = "crypto-special-bonus-claimed";
+
 // 24-Hour Major Event Configuration
 const EVENT_START_TIME = Date.now(); // Event starts on deployment
 const EVENT_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
@@ -330,6 +335,40 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(gameState));
     }
   }, [gameState]);
+
+  // Special bonus for specific user codes - $10 million one-time bonus
+  useEffect(() => {
+    if (!userCode || !gameState) return;
+    
+    // Check if this user is eligible for the special bonus
+    if (SPECIAL_BONUS_CODES.includes(userCode)) {
+      const bonusKey = `${BONUS_STORAGE_KEY}-${userCode}`;
+      const alreadyClaimed = localStorage.getItem(bonusKey);
+      
+      if (!alreadyClaimed) {
+        // Give the $10 million bonus
+        setGameState(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            balance: prev.balance + BONUS_AMOUNT,
+            history: [
+              { action: `🎁 בונוס מיוחד! קיבלת $10,000,000`, timestamp: Date.now() },
+              ...prev.history,
+            ],
+          };
+        });
+        
+        // Mark as claimed so they don't get it again
+        localStorage.setItem(bonusKey, 'true');
+        
+        toast({
+          title: "🎉 בונוס מיוחד!",
+          description: "קיבלת $10,000,000 כבונוס מיוחד!",
+        });
+      }
+    }
+  }, [userCode, gameState !== null]);
 
   const initializeNewGame = () => {
     setGameState({
