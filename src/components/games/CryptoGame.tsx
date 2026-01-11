@@ -26,7 +26,9 @@ import {
   Flame,
   Crown,
   Sparkles,
-  Star
+  Star,
+  Volume2,
+  VolumeX
 } from "lucide-react";
 
 // Creator codes with higher spike chance
@@ -36,6 +38,10 @@ const CREATOR_CODES = ["426671703"];
 const SPECIAL_BONUS_CODES = ["426671703", "322423534"];
 const BONUS_AMOUNT = 10000000; // $10 million
 const BONUS_STORAGE_KEY = "crypto-special-bonus-claimed";
+const SOUND_ENABLED_KEY = "crypto-sound-enabled";
+
+// Global sound state (will be updated by component)
+let globalSoundEnabled = true;
 
 // 24-Hour Major Event Configuration
 const EVENT_START_TIME = Date.now(); // Event starts on deployment
@@ -76,6 +82,7 @@ const STORAGE_KEY = "crypto-game-state";
 
 // Sound effects using Web Audio API
 const playEventSound = (type: 'start' | 'surge' | 'massive') => {
+  if (!globalSoundEnabled) return; // Check if sound is enabled
   try {
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
@@ -242,10 +249,20 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
   const [eventData, setEventData] = useState<EventData | null>(null);
   const [surgeAnimation, setSurgeAnimation] = useState<{ name: string; change: number } | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem(SOUND_ENABLED_KEY);
+    return saved !== 'false'; // Default to true
+  });
   const spikeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const surgeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const eventSoundPlayedRef = useRef<boolean>(false);
   const { toast } = useToast();
+
+  // Update global sound state when local state changes
+  useEffect(() => {
+    globalSoundEnabled = soundEnabled;
+    localStorage.setItem(SOUND_ENABLED_KEY, soundEnabled.toString());
+  }, [soundEnabled]);
 
   const isCreator = userCode && CREATOR_CODES.includes(userCode);
 
@@ -849,6 +866,21 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
 
       {/* Header */}
       <div className="text-center relative z-10">
+        {/* Sound Toggle Button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setSoundEnabled(!soundEnabled)}
+          className="absolute left-0 top-0 text-muted-foreground hover:text-foreground"
+          title={soundEnabled ? "השתק צלילים" : "הפעל צלילים"}
+        >
+          {soundEnabled ? (
+            <Volume2 className="w-5 h-5" />
+          ) : (
+            <VolumeX className="w-5 h-5" />
+          )}
+        </Button>
+        
         <h2 className={`text-3xl font-bold mb-2 flex items-center justify-center gap-2 ${isEventActive ? 'text-orange-400' : 'text-green-500'}`}>
           {isEventActive ? <Flame className="w-8 h-8 animate-pulse" /> : <Zap className="w-8 h-8" />}
           קריפטו־גיים
