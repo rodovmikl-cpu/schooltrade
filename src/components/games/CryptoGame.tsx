@@ -64,10 +64,18 @@ interface Crypto {
   preEventPrice?: number; // Store price before event started
 }
 
+// Track holdings with buy percentage for profit calculation
+interface Holding {
+  amount: number;
+  buyPercentage: number; // The percentage at time of purchase (change24h)
+  investedAmount: number; // Total $ invested in this holding
+}
+
 interface GameState {
   balance: number;
   cryptos: Crypto[];
-  portfolio: { [id: string]: number };
+  portfolio: { [id: string]: number }; // Legacy - total amount owned
+  holdings: { [id: string]: Holding[] }; // New - track each purchase with its buy percentage
   totalInvested: number;
   history: { action: string; timestamp: number }[];
 }
@@ -392,10 +400,33 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
       balance: 20,
       cryptos: initializeCryptos(),
       portfolio: {},
+      holdings: {}, // Initialize empty holdings
       totalInvested: 0,
       history: [{ action: "משחק התחיל עם $20", timestamp: Date.now() }],
     });
   };
+
+  // Migrate old saves without holdings
+  useEffect(() => {
+    if (gameState && !gameState.holdings) {
+      setGameState(prev => {
+        if (!prev) return prev;
+        // Create holdings from existing portfolio (assume 0% buy percentage for legacy)
+        const migratedHoldings: { [id: string]: Holding[] } = {};
+        Object.entries(prev.portfolio).forEach(([id, amount]) => {
+          const crypto = prev.cryptos.find(c => c.id === id);
+          if (crypto && amount > 0) {
+            migratedHoldings[id] = [{
+              amount,
+              buyPercentage: 0, // Legacy holdings assume neutral buy
+              investedAmount: crypto.price * amount
+            }];
+          }
+        });
+        return { ...prev, holdings: migratedHoldings };
+      });
+    }
+  }, [gameState]);
 
   const updatePrices = useCallback(() => {
     if (!gameState) return;
@@ -589,6 +620,9 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
       return;
     }
 
+    // Store the current percentage (change24h) as the buy percentage
+    const buyPercentage = crypto.change24h;
+
     setGameState(prev => {
       if (!prev) return prev;
 
@@ -597,24 +631,40 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
         [crypto.id]: (prev.portfolio[crypto.id] || 0) + amount,
       };
 
+      // Add new holding with buy percentage
+      const existingHoldings = prev.holdings?.[crypto.id] || [];
+      const newHolding: Holding = {
+        amount,
+        buyPercentage,
+        investedAmount: totalCost
+      };
+      const newHoldings = {
+        ...prev.holdings,
+        [crypto.id]: [...existingHoldings, newHolding],
+      };
+
       const updatedCryptos = prev.cryptos.map(c =>
         c.id === crypto.id ? { ...c, owned: (c.owned || 0) + amount } : c
       );
+
+      const buyPercentageDisplay = buyPercentage >= 0 ? `+${buyPercentage.toFixed(1)}%` : `${buyPercentage.toFixed(1)}%`;
 
       return {
         ...prev,
         balance: prev.balance - totalCost,
         portfolio: newPortfolio,
+        holdings: newHoldings,
         cryptos: updatedCryptos,
         totalInvested: prev.totalInvested + totalCost,
         history: [
-          { action: `קנית ${amount} ${crypto.name} ב-$${totalCost.toFixed(2)}`, timestamp: Date.now() },
+          { action: `קנית ${amount} ${crypto.name} ב-$${totalCost.toFixed(2)} (${buyPercentageDisplay})`, timestamp: Date.now() },
           ...prev.history.slice(0, 49),
         ],
       };
     });
 
-    toast({ title: `קנית ${amount} ${crypto.name}!` });
+    const buyPercentageDisplay = buyPercentage >= 0 ? `+${buyPercentage.toFixed(1)}%` : `${buyPercentage.toFixed(1)}%`;
+    toast({ title: `קנית ${amount} ${crypto.name} ב-${buyPercentageDisplay}!` });
     setBuyAmount("");
     setSelectedCrypto(null);
   };
@@ -628,7 +678,48 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
       return;
     }
 
-    const totalValue = crypto.price * amount;
+    // Get current sell percentage
+    const sellPercentage = crypto.change24h;
+
+    // Calculate profit/loss based on percentage difference (FIFO - First In First Out)
+    const holdings = gameState.holdings?.[crypto.id] || [];
+    let remainingToSell = amount;
+    let totalProfit = 0;
+    let totalInvested = 0;
+    let weightedBuyPercentage = 0;
+
+    // Process holdings FIFO
+    const updatedHoldings: Holding[] = [];
+    for (const holding of holdings) {
+      if (remainingToSell <= 0) {
+        updatedHoldings.push(holding);
+        continue;
+      }
+
+      const sellFromThis = Math.min(remainingToSell, holding.amount);
+      const percentageDiff = sellPercentage - holding.buyPercentage; // Profit % = sell% - buy%
+      const holdingInvested = (sellFromThis / holding.amount) * holding.investedAmount;
+      const profitFromThis = holdingInvested * (percentageDiff / 100);
+
+      totalProfit += profitFromThis;
+      totalInvested += holdingInvested;
+      weightedBuyPercentage += holding.buyPercentage * sellFromThis;
+      remainingToSell -= sellFromThis;
+
+      // Keep remaining amount in holding
+      const remainingInHolding = holding.amount - sellFromThis;
+      if (remainingInHolding > 0) {
+        updatedHoldings.push({
+          ...holding,
+          amount: remainingInHolding,
+          investedAmount: holding.investedAmount * (remainingInHolding / holding.amount)
+        });
+      }
+    }
+
+    weightedBuyPercentage = amount > 0 ? weightedBuyPercentage / amount : 0;
+    const percentageDiff = sellPercentage - weightedBuyPercentage;
+    const finalValue = totalInvested + totalProfit;
 
     setGameState(prev => {
       if (!prev) return prev;
@@ -641,23 +732,44 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
         newPortfolio[crypto.id] = newOwned;
       }
 
+      // Update holdings
+      const newHoldings = { ...prev.holdings };
+      if (updatedHoldings.length === 0) {
+        delete newHoldings[crypto.id];
+      } else {
+        newHoldings[crypto.id] = updatedHoldings;
+      }
+
       const updatedCryptos = prev.cryptos.map(c =>
         c.id === crypto.id ? { ...c, owned: Math.max(0, (c.owned || 0) - amount) } : c
       );
 
+      // Format profit/loss display
+      const profitSign = totalProfit >= 0 ? '+' : '';
+      const percentSign = percentageDiff >= 0 ? '+' : '';
+      const profitDisplay = `${profitSign}$${Math.abs(totalProfit).toFixed(2)} (${percentSign}${percentageDiff.toFixed(1)}%)`;
+
       return {
         ...prev,
-        balance: prev.balance + totalValue,
+        balance: prev.balance + finalValue,
         portfolio: newPortfolio,
+        holdings: newHoldings,
         cryptos: updatedCryptos,
         history: [
-          { action: `מכרת ${amount} ${crypto.name} ב-$${totalValue.toFixed(2)}`, timestamp: Date.now() },
+          { action: `מכרת ${amount} ${crypto.name} ב-$${finalValue.toFixed(2)} | ${profitDisplay}`, timestamp: Date.now() },
           ...prev.history.slice(0, 49),
         ],
       };
     });
 
-    toast({ title: `מכרת ${amount} ${crypto.name} ב-$${totalValue.toFixed(2)}!` });
+    // Show toast with profit/loss info
+    const profitSign = totalProfit >= 0 ? '+' : '';
+    const percentSign = percentageDiff >= 0 ? '+' : '';
+    const profitColor = totalProfit >= 0 ? 'רווח' : 'הפסד';
+    toast({ 
+      title: `מכרת ${amount} ${crypto.name}!`,
+      description: `${profitColor}: ${profitSign}$${Math.abs(totalProfit).toFixed(2)} (${percentSign}${percentageDiff.toFixed(1)}%)`,
+    });
   };
 
   const createCustomCrypto = () => {
@@ -687,6 +799,13 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
       isCustom: true,
     };
 
+    // Custom cryptos start with 0% change (neutral buy)
+    const newHolding: Holding = {
+      amount,
+      buyPercentage: 0,
+      investedAmount: totalCost
+    };
+
     setGameState(prev => {
       if (!prev) return prev;
 
@@ -697,6 +816,10 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
         portfolio: {
           ...prev.portfolio,
           [newCrypto.id]: amount,
+        },
+        holdings: {
+          ...prev.holdings,
+          [newCrypto.id]: [newHolding],
         },
         history: [
           { action: `יצרת מטבע חדש: ${newCryptoName} (${amount} מטבעות ב-$${totalCost.toFixed(2)})`, timestamp: Date.now() },
@@ -727,12 +850,56 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
     return `$${price.toFixed(6)}`;
   };
 
+  // Calculate portfolio value based on percentage-based profit/loss
   const getPortfolioValue = () => {
     if (!gameState) return 0;
-    return Object.entries(gameState.portfolio).reduce((total, [id, amount]) => {
+    
+    let totalValue = 0;
+    
+    // Calculate value for each holding based on percentage difference
+    Object.entries(gameState.holdings || {}).forEach(([id, holdings]) => {
       const crypto = gameState.cryptos.find(c => c.id === id);
-      return total + (crypto ? crypto.price * amount : 0);
-    }, 0);
+      if (!crypto) return;
+      
+      const currentPercentage = crypto.change24h;
+      
+      holdings.forEach(holding => {
+        // Profit/loss = sell% - buy%
+        const percentageDiff = currentPercentage - holding.buyPercentage;
+        const profitLoss = holding.investedAmount * (percentageDiff / 100);
+        const holdingValue = holding.investedAmount + profitLoss;
+        totalValue += Math.max(0, holdingValue); // Prevent negative values
+      });
+    });
+    
+    return totalValue;
+  };
+
+  // Calculate potential profit/loss for a specific crypto
+  const getCryptoProfit = (crypto: Crypto) => {
+    if (!gameState || !gameState.holdings) return { profit: 0, percentage: 0, invested: 0 };
+    
+    const holdings = gameState.holdings[crypto.id] || [];
+    if (holdings.length === 0) return { profit: 0, percentage: 0, invested: 0 };
+    
+    let totalProfit = 0;
+    let totalInvested = 0;
+    let weightedBuyPercentage = 0;
+    let totalAmount = 0;
+    
+    holdings.forEach(holding => {
+      const percentageDiff = crypto.change24h - holding.buyPercentage;
+      const profitFromHolding = holding.investedAmount * (percentageDiff / 100);
+      totalProfit += profitFromHolding;
+      totalInvested += holding.investedAmount;
+      weightedBuyPercentage += holding.buyPercentage * holding.amount;
+      totalAmount += holding.amount;
+    });
+    
+    const avgBuyPercentage = totalAmount > 0 ? weightedBuyPercentage / totalAmount : 0;
+    const percentageDiff = crypto.change24h - avgBuyPercentage;
+    
+    return { profit: totalProfit, percentage: percentageDiff, invested: totalInvested };
   };
 
   const filteredCryptos = gameState?.cryptos.filter(crypto => {
@@ -1009,69 +1176,86 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
                 ) : (
                   gameState.cryptos
                     .filter(c => (c.owned || 0) > 0)
-                    .map(crypto => (
-                      <Card key={crypto.id} className="p-4 border-blue-500/20">
-                        <div className="flex items-center justify-between mb-2">
-                          <div>
-                            <span className="font-bold">{crypto.name}</span>
-                            <span className="text-xs text-muted-foreground mr-2">({crypto.symbol})</span>
-                            {crypto.isCustom && <Badge variant="outline" className="text-purple-500 border-purple-500 mr-2">שלי</Badge>}
+                    .map(crypto => {
+                      const { profit, percentage, invested } = getCryptoProfit(crypto);
+                      const profitColor = profit >= 0 ? 'text-green-500' : 'text-red-500';
+                      const percentSign = percentage >= 0 ? '+' : '';
+                      const profitSign = profit >= 0 ? '+' : '';
+                      
+                      return (
+                        <Card key={crypto.id} className="p-4 border-blue-500/20">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <span className="font-bold">{crypto.name}</span>
+                              <span className="text-xs text-muted-foreground mr-2">({crypto.symbol})</span>
+                              {crypto.isCustom && <Badge variant="outline" className="text-purple-500 border-purple-500 mr-2">שלי</Badge>}
+                            </div>
+                            <div className={`text-sm ${crypto.change24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                              {crypto.change24h >= 0 ? '+' : ''}{crypto.change24h.toFixed(2)}%
+                            </div>
                           </div>
-                          <div className={`text-sm ${crypto.change24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            {crypto.change24h >= 0 ? '+' : ''}{crypto.change24h.toFixed(2)}%
+                          <div className="text-sm text-muted-foreground mb-2">
+                            ברשותך: <strong>{crypto.owned}</strong> מטבעות
+                            <br />
+                            השקעה: <strong>{formatPrice(invested)}</strong>
+                            <br />
+                            <span className={profitColor}>
+                              {profit >= 0 ? 'רווח' : 'הפסד'}: <strong>{profitSign}${Math.abs(profit).toFixed(2)} ({percentSign}{percentage.toFixed(1)}%)</strong>
+                            </span>
                           </div>
-                        </div>
-                        <div className="text-sm text-muted-foreground mb-2">
-                          ברשותך: <strong>{crypto.owned}</strong> מטבעות
-                          <br />
-                          מחיר נוכחי: <strong>{formatPrice(crypto.price)}</strong>
-                          <br />
-                          שווי כולל: <strong>{formatPrice(crypto.price * (crypto.owned || 0))}</strong>
-                        </div>
-                        <div className="flex gap-2 items-center">
-                          <Input
-                            type="number"
-                            placeholder="כמות למכירה"
-                            value={sellAmounts[crypto.id] || ""}
-                            onChange={(e) => setSellAmounts(prev => ({ ...prev, [crypto.id]: e.target.value }))}
-                            min="0.01"
-                            max={crypto.owned}
-                            step="0.01"
-                            className="flex-1"
-                          />
+                          <div className="flex gap-2 items-center">
+                            <Input
+                              type="number"
+                              placeholder="כמות למכירה"
+                              value={sellAmounts[crypto.id] || ""}
+                              onChange={(e) => setSellAmounts(prev => ({ ...prev, [crypto.id]: e.target.value }))}
+                              min="0.01"
+                              max={crypto.owned}
+                              step="0.01"
+                              className="flex-1"
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setSellAmounts(prev => ({ ...prev, [crypto.id]: String(crypto.owned) }))}
+                            >
+                              הכל
+                            </Button>
+                          </div>
+                          {sellAmounts[crypto.id] && parseFloat(sellAmounts[crypto.id]) > 0 && (() => {
+                            const sellAmount = parseFloat(sellAmounts[crypto.id]);
+                            const ratio = sellAmount / (crypto.owned || 1);
+                            const expectedProfit = profit * ratio;
+                            const expectedValue = (invested * ratio) + expectedProfit;
+                            const expectedProfitSign = expectedProfit >= 0 ? '+' : '';
+                            
+                            return (
+                              <div className={`mt-2 text-sm ${expectedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                תקבל: {formatPrice(expectedValue)} ({expectedProfitSign}${Math.abs(expectedProfit).toFixed(2)})
+                              </div>
+                            );
+                          })()}
                           <Button
+                            className={`w-full mt-2 ${profit >= 0 ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
                             size="sm"
-                            variant="outline"
-                            onClick={() => setSellAmounts(prev => ({ ...prev, [crypto.id]: String(crypto.owned) }))}
+                            onClick={() => {
+                              const amount = parseFloat(sellAmounts[crypto.id] || "0");
+                              if (amount > 0 && amount <= (crypto.owned || 0)) {
+                                sellCrypto(crypto, amount);
+                                setSellAmounts(prev => {
+                                  const newAmounts = { ...prev };
+                                  delete newAmounts[crypto.id];
+                                  return newAmounts;
+                                });
+                              }
+                            }}
+                            disabled={!sellAmounts[crypto.id] || parseFloat(sellAmounts[crypto.id]) <= 0 || parseFloat(sellAmounts[crypto.id]) > (crypto.owned || 0)}
                           >
-                            הכל
+                            {profit >= 0 ? 'מכור ברווח' : 'מכור בהפסד'}
                           </Button>
-                        </div>
-                        {sellAmounts[crypto.id] && parseFloat(sellAmounts[crypto.id]) > 0 && (
-                          <div className="mt-2 text-sm text-green-400">
-                            תקבל: {formatPrice(crypto.price * parseFloat(sellAmounts[crypto.id]))}
-                          </div>
-                        )}
-                        <Button
-                          className="w-full mt-2 bg-red-600 hover:bg-red-700"
-                          size="sm"
-                          onClick={() => {
-                            const amount = parseFloat(sellAmounts[crypto.id] || "0");
-                            if (amount > 0 && amount <= (crypto.owned || 0)) {
-                              sellCrypto(crypto, amount);
-                              setSellAmounts(prev => {
-                                const newAmounts = { ...prev };
-                                delete newAmounts[crypto.id];
-                                return newAmounts;
-                              });
-                            }
-                          }}
-                          disabled={!sellAmounts[crypto.id] || parseFloat(sellAmounts[crypto.id]) <= 0 || parseFloat(sellAmounts[crypto.id]) > (crypto.owned || 0)}
-                        >
-                          מכור
-                        </Button>
-                      </Card>
-                    ))
+                        </Card>
+                      );
+                    })
                 )}
               </div>
             </ScrollArea>
