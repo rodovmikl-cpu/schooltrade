@@ -25,12 +25,16 @@ import { PremiumClubTab } from "@/components/PremiumClubTab";
 import { CryptoGame } from "@/components/games/CryptoGame";
 import { LimitedChatTab } from "@/components/LimitedChatTab";
 import { Badge } from "@/components/ui/badge";
+import { MathGame } from "@/components/games/MathGame";
+import { HebrewGame } from "@/components/games/HebrewGame";
+import { EnglishGame } from "@/components/games/EnglishGame";
+import { SchoolNews } from "@/components/games/SchoolNews";
 
 const PREMIUM_USERS = ["161221063", "752025692", "426671703"];
 
 const Index = () => {
   const [user, setUser] = useState<{ code: string; name: string; role: string } | null>(null);
-  const [view, setView] = useState<"login" | "register" | "posts" | "create" | "admin" | "security" | "halloween" | "snake" | "christmas" | "premiumClub" | "crypto" | "limitedChat">("login");
+  const [view, setView] = useState<"login" | "register" | "posts" | "create" | "admin" | "security" | "halloween" | "snake" | "christmas" | "premiumClub" | "crypto" | "limitedChat" | "mathGame" | "hebrewGame" | "englishGame" | "schoolNews">("login");
   const [hasLimitedChat, setHasLimitedChat] = useState(false);
   const [unreadLimitedChat, setUnreadLimitedChat] = useState(0);
   const { isHalloweenActive } = useHalloween();
@@ -277,6 +281,34 @@ const Index = () => {
               >
                 💰 קריפטו־גיים
               </Button>
+              <Button
+                variant={view === "mathGame" ? "default" : "outline"}
+                onClick={() => setView("mathGame")}
+                className="flex-1 min-w-[140px] bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50"
+              >
+                🧮 משחק מתמטי
+              </Button>
+              <Button
+                variant={view === "hebrewGame" ? "default" : "outline"}
+                onClick={() => setView("hebrewGame")}
+                className="flex-1 min-w-[140px] bg-purple-500/20 hover:bg-purple-500/30 border-purple-500/50"
+              >
+                📚 משחק עברית
+              </Button>
+              <Button
+                variant={view === "englishGame" ? "default" : "outline"}
+                onClick={() => setView("englishGame")}
+                className="flex-1 min-w-[140px] bg-cyan-500/20 hover:bg-cyan-500/30 border-cyan-500/50"
+              >
+                🇬🇧 משחק אנגלית
+              </Button>
+              <Button
+                variant={view === "schoolNews" ? "default" : "outline"}
+                onClick={() => setView("schoolNews")}
+                className="flex-1 min-w-[140px] bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/50"
+              >
+                📰 חדשות בית ספר
+              </Button>
               {isPremiumUser && (
                 <Button
                   variant={view === "premiumClub" ? "default" : "outline"}
@@ -316,6 +348,10 @@ const Index = () => {
             {view === "christmas" && isChristmasActive && <ChristmasTabs />}
             {view === "snake" && <SnakeGame />}
             {view === "crypto" && <CryptoGame userCode={user.code} />}
+            {view === "mathGame" && <MathGame />}
+            {view === "hebrewGame" && <HebrewGame />}
+            {view === "englishGame" && <EnglishGame />}
+            {view === "schoolNews" && <SchoolNews userCode={user.code} userName={user.name} />}
             {view === "premiumClub" && isPremiumUser && <PremiumClubTab userCode={user.code} userName={user.name} />}
             {view === "limitedChat" && !isPremiumUser && hasLimitedChat && <LimitedChatTab userCode={user.code} userName={user.name} />}
           </div>

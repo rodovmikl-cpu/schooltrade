@@ -295,6 +295,33 @@ export type Database = {
         }
         Relationships: []
       }
+      school_news: {
+        Row: {
+          author_code: string
+          author_name: string
+          content: string
+          created_at: string
+          id: string
+          image_url: string | null
+        }
+        Insert: {
+          author_code: string
+          author_name: string
+          content: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+        }
+        Update: {
+          author_code?: string
+          author_name?: string
+          content?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+        }
+        Relationships: []
+      }
       security_logs: {
         Row: {
           created_at: string | null
