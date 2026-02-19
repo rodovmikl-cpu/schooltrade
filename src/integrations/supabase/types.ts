@@ -111,6 +111,45 @@ export type Database = {
         }
         Relationships: []
       }
+      keif_balances: {
+        Row: {
+          converted_crypto: number
+          converted_english: number
+          converted_hebrew: number
+          converted_math: number
+          created_at: string
+          id: string
+          total_keif: number
+          updated_at: string
+          user_code: string
+          user_name: string
+        }
+        Insert: {
+          converted_crypto?: number
+          converted_english?: number
+          converted_hebrew?: number
+          converted_math?: number
+          created_at?: string
+          id?: string
+          total_keif?: number
+          updated_at?: string
+          user_code: string
+          user_name: string
+        }
+        Update: {
+          converted_crypto?: number
+          converted_english?: number
+          converted_hebrew?: number
+          converted_math?: number
+          created_at?: string
+          id?: string
+          total_keif?: number
+          updated_at?: string
+          user_code?: string
+          user_name?: string
+        }
+        Relationships: []
+      }
       posts: {
         Row: {
           auction_active: boolean | null

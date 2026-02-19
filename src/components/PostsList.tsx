@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, MessageCircle } from "lucide-react";
+import { Trash2, MessageCircle, Search, Bookmark, Share2, SlidersHorizontal } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import { AnimatedUsername } from "@/components/AnimatedUsername";
+import { playSound } from "@/lib/sounds";
 
 interface Post {
   id: string;
@@ -46,6 +47,14 @@ const PostsList = ({ userCode, userName, isAdmin }: PostsListProps) => {
   const [loading, setLoading] = useState(true);
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
   const [bidAmounts, setBidAmounts] = useState<Record<string, string>>({});
+  // Premium features state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortMode, setSortMode] = useState<"newest" | "price_asc" | "price_desc" | "auction">("newest");
+  const [bookmarked, setBookmarked] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("bookmarked-posts") || "[]")); } catch { return new Set(); }
+  });
+  const [showSearch, setShowSearch] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -275,10 +284,52 @@ const PostsList = ({ userCode, userName, isAdmin }: PostsListProps) => {
     }
   };
 
-  const canDeleteComment = (comment: Comment) => 
+  const canDeleteComment = (comment: Comment) =>
     isAdmin || comment.user_code === userCode;
 
   const canDelete = (post: Post) => isAdmin || post.owner_code === userCode;
+
+  const toggleBookmark = (postId: string) => {
+    playSound("click");
+    setBookmarked(prev => {
+      const next = new Set(prev);
+      if (next.has(postId)) next.delete(postId);
+      else next.add(postId);
+      localStorage.setItem("bookmarked-posts", JSON.stringify(Array.from(next)));
+      return next;
+    });
+  };
+
+  const handleShare = (post: Post) => {
+    playSound("click");
+    const text = `${post.owner_name}: ${post.description} - ${post.price}`;
+    if (navigator.share) {
+      navigator.share({ title: "Schooltrade", text, url: window.location.href });
+    } else {
+      navigator.clipboard.writeText(text);
+      toast({ title: "הועתק ללוח!" });
+    }
+  };
+
+  const filteredPosts = useMemo(() => {
+    let result = [...posts];
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(p =>
+        p.description.toLowerCase().includes(q) ||
+        p.owner_name.toLowerCase().includes(q) ||
+        p.price.toLowerCase().includes(q)
+      );
+    }
+    if (sortMode === "price_asc") {
+      result.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+    } else if (sortMode === "price_desc") {
+      result.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+    } else if (sortMode === "auction") {
+      result = result.filter(p => p.posting_mode === "auction");
+    }
+    return result;
+  }, [posts, searchQuery, sortMode]);
 
   if (loading) {
     return (
@@ -298,11 +349,69 @@ const PostsList = ({ userCode, userName, isAdmin }: PostsListProps) => {
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      {posts.map((post) => (
+    <div className="space-y-4">
+      {/* Premium Feature Bar: Search, Sort, Filter */}
+      <div className="flex flex-wrap gap-2 items-center bg-card rounded-xl p-3 border border-border shadow-soft" dir="rtl">
+        <Button
+          variant="ghost" size="sm"
+          onClick={() => { setShowSearch(v => !v); playSound("click"); }}
+          className={`gap-1.5 ${showSearch ? "text-primary" : ""}`}
+        >
+          <Search className="w-4 h-4" /> חיפוש
+        </Button>
+        <Button
+          variant="ghost" size="sm"
+          onClick={() => { setShowFilters(v => !v); playSound("click"); }}
+          className={`gap-1.5 ${showFilters ? "text-primary" : ""}`}
+        >
+          <SlidersHorizontal className="w-4 h-4" /> מיון וסינון
+        </Button>
+        <div className="text-xs text-muted-foreground mr-auto">
+          {filteredPosts.length} מודעות
+        </div>
+      </div>
+
+      {showSearch && (
+        <div className="relative" style={{ animation: "fadeSlideIn 0.25s ease-out" }}>
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="חפש מודעות..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="pr-10"
+            dir="rtl"
+            autoFocus
+          />
+        </div>
+      )}
+
+      {showFilters && (
+        <div className="flex flex-wrap gap-2" style={{ animation: "fadeSlideIn 0.25s ease-out" }}>
+          {([
+            { key: "newest", label: "🕐 חדש ביותר" },
+            { key: "price_asc", label: "💰 מחיר עולה" },
+            { key: "price_desc", label: "💰 מחיר יורד" },
+            { key: "auction", label: "🔨 מכירה פומבית" },
+          ] as const).map(opt => (
+            <Button
+              key={opt.key}
+              size="sm"
+              variant={sortMode === opt.key ? "default" : "outline"}
+              onClick={() => { setSortMode(opt.key); playSound("click"); }}
+              className="transition-all duration-200"
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {filteredPosts.map((post) => (
         <div
           key={post.id}
-          className="bg-card rounded-2xl shadow-soft overflow-hidden hover:shadow-glow transition-all"
+          className="bg-card rounded-2xl shadow-soft overflow-hidden hover:shadow-glow transition-all duration-300 hover:scale-[1.01]"
+          style={{ animation: "fadeSlideIn 0.3s ease-out" }}
         >
           {/* Image */}
           <img
@@ -348,6 +457,21 @@ const PostsList = ({ userCode, userName, isAdmin }: PostsListProps) => {
                   <div className="text-primary font-bold text-xl">{post.price}</div>
                 )}
               </div>
+            </div>
+
+            {/* Premium Feature: Bookmark & Share */}
+            <div className="flex gap-2 justify-end border-t pt-2">
+              <Button
+                variant="ghost" size="sm"
+                onClick={() => toggleBookmark(post.id)}
+                className={`gap-1 transition-all duration-200 ${bookmarked.has(post.id) ? "text-primary" : "text-muted-foreground"}`}
+              >
+                <Bookmark className={`w-4 h-4 ${bookmarked.has(post.id) ? "fill-primary" : ""}`} />
+                {bookmarked.has(post.id) ? "נשמר" : "שמור"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => handleShare(post)} className="gap-1 text-muted-foreground">
+                <Share2 className="w-4 h-4" /> שתף
+              </Button>
             </div>
 
             {/* Description */}
@@ -464,6 +588,7 @@ const PostsList = ({ userCode, userName, isAdmin }: PostsListProps) => {
           </div>
         </div>
       ))}
+      </div>
     </div>
   );
 };

@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
@@ -29,8 +28,10 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [newContent, setNewContent] = useState("");
-  const [newImageUrl, setNewImageUrl] = useState("");
+  const [newImageFile, setNewImageFile] = useState<File | null>(null);
+  const [newImagePreview, setNewImagePreview] = useState<string>("");
   const [publishing, setPublishing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const isPublisher = userCode === PUBLISHER_CODE;
@@ -60,44 +61,44 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
     }
   };
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setNewImageFile(file);
+    const url = URL.createObjectURL(file);
+    setNewImagePreview(url);
+  };
+
   const publishNews = async () => {
     if (!newContent.trim()) {
-      toast({
-        title: "שגיאה",
-        description: "יש להזין תוכן לחדשות",
-        variant: "destructive"
-      });
+      toast({ title: "שגיאה", description: "יש להזין תוכן לחדשות", variant: "destructive" });
       return;
     }
-
     setPublishing(true);
     try {
+      let imageUrl: string | null = null;
+      if (newImageFile) {
+        const fileName = `news/${Date.now()}-${newImageFile.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from("schooltrade-photos")
+          .upload(fileName, newImageFile, { contentType: newImageFile.type });
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from("schooltrade-photos").getPublicUrl(fileName);
+          imageUrl = urlData.publicUrl;
+        }
+      }
       const { error } = await supabase
         .from("school_news")
-        .insert({
-          author_code: userCode,
-          author_name: userName,
-          content: newContent.trim(),
-          image_url: newImageUrl.trim() || null
-        });
-
+        .insert({ author_code: userCode, author_name: userName, content: newContent.trim(), image_url: imageUrl });
       if (error) throw error;
-
-      toast({
-        title: "פורסם בהצלחה!",
-        description: "החדשות פורסמו לכל המשתמשים"
-      });
-
+      toast({ title: "פורסם בהצלחה!", description: "החדשות פורסמו לכל המשתמשים" });
       setNewContent("");
-      setNewImageUrl("");
+      setNewImageFile(null);
+      setNewImagePreview("");
       fetchNews();
     } catch (error) {
       console.error("Error publishing news:", error);
-      toast({
-        title: "שגיאה",
-        description: "לא הצלחנו לפרסם את החדשות",
-        variant: "destructive"
-      });
+      toast({ title: "שגיאה", description: "לא הצלחנו לפרסם את החדשות", variant: "destructive" });
     } finally {
       setPublishing(false);
     }
@@ -165,14 +166,36 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
               rows={4}
               className="resize-none"
             />
-            <Input
-              placeholder="קישור לתמונה (אופציונלי)"
-              value={newImageUrl}
-              onChange={(e) => setNewImageUrl(e.target.value)}
-              dir="ltr"
-            />
-            <Button 
-              onClick={publishNews} 
+            {/* Gallery image picker */}
+            <div className="space-y-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture={undefined}
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                🖼️ {newImageFile ? "תמונה נבחרה - לחץ לשינוי" : "בחר תמונה מהגלריה"}
+              </Button>
+              {newImagePreview && (
+                <div className="relative rounded-lg overflow-hidden">
+                  <img src={newImagePreview} alt="תצוגה מקדימה" className="w-full h-40 object-cover rounded-lg" />
+                  <button
+                    onClick={() => { setNewImageFile(null); setNewImagePreview(""); }}
+                    className="absolute top-2 left-2 bg-black/60 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                  >✕</button>
+                </div>
+              )}
+            </div>
+            <Button
+              onClick={publishNews}
               disabled={publishing || !newContent.trim()}
               className="w-full"
             >
