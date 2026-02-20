@@ -28,13 +28,35 @@ const SOURCE_GAMES = [
   { key: "crypto", label: "💰 קריפטו-גיים", storageKey: "cryptoGameState", field: "converted_crypto" },
 ];
 
+const getCryptoTotalValue = (parsed: any): number => {
+  let cash = parsed.balance || 0;
+  let portfolioValue = 0;
+
+  const holdings = parsed.holdings || {};
+  const cryptos = parsed.cryptos || [];
+
+  Object.entries(holdings).forEach(([id, holdingsList]: [string, any]) => {
+    const crypto = cryptos.find((c: any) => c.id === id);
+    if (!crypto) return;
+    const currentPercentage = crypto.change24h || 0;
+    (holdingsList as any[]).forEach((holding: any) => {
+      const percentageDiff = currentPercentage - (holding.buyPercentage || 0);
+      const profitLoss = (holding.investedAmount || 0) * (percentageDiff / 100);
+      const holdingValue = (holding.investedAmount || 0) + profitLoss;
+      portfolioValue += Math.max(0, holdingValue);
+    });
+  });
+
+  return Math.floor(cash + portfolioValue);
+};
+
 const getGameBalance = (storageKey: string): number => {
   try {
     const raw = localStorage.getItem(storageKey);
     if (!raw) return 0;
     const parsed = JSON.parse(raw);
     if (storageKey === "cryptoGameState") {
-      return Math.floor(parsed.balance || 0);
+      return getCryptoTotalValue(parsed);
     }
     return Math.floor(parsed.totalPoints || 0);
   } catch {
