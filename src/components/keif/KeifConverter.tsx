@@ -55,7 +55,7 @@ const getGameBalance = (storageKey: string): number => {
     const raw = localStorage.getItem(storageKey);
     if (!raw) return 0;
     const parsed = JSON.parse(raw);
-    if (storageKey === "cryptoGameState") {
+    if (storageKey === "crypto-game-state") {
       return getCryptoTotalValue(parsed);
     }
     return Math.floor(parsed.totalPoints || 0);
