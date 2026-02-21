@@ -5,6 +5,8 @@ import { HebrewGame } from "@/components/games/HebrewGame";
 import { EnglishGame } from "@/components/games/EnglishGame";
 import { SchoolNews } from "@/components/games/SchoolNews";
 import { SnakeGame } from "@/components/SnakeGame";
+import { PremiumGameBadge } from "@/components/premium/PremiumGameBadge";
+import { isPremiumUser } from "@/lib/premium";
 import { playSound } from "@/lib/sounds";
 
 interface GamesHubProps {
@@ -25,6 +27,7 @@ const GAMES = [
 
 export const GamesHub = ({ userCode, userName }: GamesHubProps) => {
   const [activeGame, setActiveGame] = useState<GameKey>("menu");
+  const isPremium = isPremiumUser(userCode);
 
   const openGame = (key: GameKey) => {
     playSound("enter");
@@ -46,6 +49,7 @@ export const GamesHub = ({ userCode, userName }: GamesHubProps) => {
           <span className="group-hover:-translate-x-1 transition-transform duration-200">←</span>
           חזרה לרשימת המשחקים
         </button>
+        <PremiumGameBadge userCode={userCode} />
         <div className="animate-[fadeSlideIn_0.3s_ease-out]">
           {activeGame === "snake" && <SnakeGame />}
           {activeGame === "crypto" && <CryptoGame userCode={userCode} />}
@@ -63,6 +67,9 @@ export const GamesHub = ({ userCode, userName }: GamesHubProps) => {
       <div className="text-center">
         <h2 className="text-3xl font-bold bg-gradient-to-l from-primary to-accent bg-clip-text text-transparent">🎮 משחקים</h2>
         <p className="text-muted-foreground mt-1">בחר משחק להתחיל</p>
+        {isPremium && (
+          <p className="text-[#00C853] text-sm font-bold mt-1 premium-text-glow">👑 חבר מועדון — ×2 תגמול בכל המשחקים!</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
