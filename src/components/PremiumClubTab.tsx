@@ -6,7 +6,6 @@ import { PrivateChats } from "@/components/PrivateChats";
 import { CryptoEmpire } from "@/components/premium/games/CryptoEmpire";
 import { MindArena } from "@/components/premium/games/MindArena";
 import { ShadowMissions } from "@/components/premium/games/ShadowMissions";
-import { DigitalDrift } from "@/components/premium/games/DigitalDrift";
 import { VIPSurvival } from "@/components/premium/games/VIPSurvival";
 import { SchooltradeBot } from "@/components/premium/SchooltradeBot";
 import { playSound } from "@/lib/sounds";
@@ -23,7 +22,6 @@ export const PremiumClubTab = ({ userCode, userName }: PremiumClubTabProps) => {
     { key: "cryptoEmpire", label: "💎 אימפריית הקריפטו", desc: "שוק סודי, NFT נדירים, מכירות פומביות", color: "from-yellow-500/20 to-amber-500/10 border-yellow-500/40" },
     { key: "mindArena", label: "🧠 אליפות המוחות", desc: "חידות עילית, קודים סודיים, לוגיקה", color: "from-purple-500/20 to-violet-500/10 border-purple-500/40" },
     { key: "shadowMissions", label: "🕶️ משימות צללים", desc: "תפקידים, פריצות, בגידות", color: "from-cyan-500/20 to-sky-500/10 border-cyan-500/40" },
-    { key: "digitalDrift", label: "🏁 זירת הדריפט", desc: "שדרוגי רכב, מרוצים, טורנירים", color: "from-orange-500/20 to-red-500/10 border-orange-500/40" },
     { key: "vipSurvival", label: "⚔️ אתגר ההישרדות", desc: "זירת PvE, לוט, כישורים מיוחדים", color: "from-red-500/20 to-rose-500/10 border-red-500/40" },
   ];
 
@@ -32,7 +30,6 @@ export const PremiumClubTab = ({ userCode, userName }: PremiumClubTabProps) => {
       case "cryptoEmpire": return <CryptoEmpire />;
       case "mindArena": return <MindArena />;
       case "shadowMissions": return <ShadowMissions />;
-      case "digitalDrift": return <DigitalDrift />;
       case "vipSurvival": return <VIPSurvival />;
       default: return null;
     }
