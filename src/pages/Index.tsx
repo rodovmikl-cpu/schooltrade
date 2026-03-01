@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useTemporaryLogo } from "@/hooks/useTemporaryLogo";
 import RegistrationForm from "@/components/RegistrationForm";
+import { SchoolCodeGate } from "@/components/SchoolCodeGate";
 import LoginForm from "@/components/LoginForm";
 import PostsList from "@/components/PostsList";
 import CreatePost from "@/components/CreatePost";
@@ -37,6 +38,7 @@ const Index = () => {
   const [hasLimitedChat, setHasLimitedChat] = useState(false);
   const [unreadLimitedChat, setUnreadLimitedChat] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [schoolVerified, setSchoolVerified] = useState(() => sessionStorage.getItem("schoolVerified") === "true");
   const { isHalloweenActive } = useHalloween();
   const { isChristmasActive, isChristmasBackgroundOnly } = useChristmas();
   const { toast } = useToast();
@@ -201,10 +203,18 @@ const Index = () => {
               {view === "login" ? (
                 <>
                   <LoginForm onSuccess={handleLoginSuccess} />
-                  <Button variant="ghost" className="w-full hover:scale-[1.01] transition-transform" onClick={() => setView("register")}>
+                  <Button variant="ghost" className="w-full hover:scale-[1.01] transition-transform" onClick={() => {
+                    if (!schoolVerified) {
+                      setView("register");
+                      return;
+                    }
+                    setView("register");
+                  }}>
                     עדיין אין לך חשבון? הירשם כאן
                   </Button>
                 </>
+              ) : !schoolVerified ? (
+                <SchoolCodeGate onVerified={() => setSchoolVerified(true)} />
               ) : (
                 <>
                   <RegistrationForm onSuccess={handleRegisterSuccess} />

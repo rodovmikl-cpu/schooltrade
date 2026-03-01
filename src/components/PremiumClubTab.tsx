@@ -8,6 +8,7 @@ import { MindArena } from "@/components/premium/games/MindArena";
 import { ShadowMissions } from "@/components/premium/games/ShadowMissions";
 import { VIPSurvival } from "@/components/premium/games/VIPSurvival";
 import { SchooltradeBot } from "@/components/premium/SchooltradeBot";
+import { Avatar3DTab } from "@/components/premium/Avatar3DTab";
 import { playSound } from "@/lib/sounds";
 
 interface PremiumClubTabProps {
@@ -43,17 +44,20 @@ export const PremiumClubTab = ({ userCode, userName }: PremiumClubTabProps) => {
       </div>
 
       <Tabs defaultValue="games" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 bg-[#00C853]/20">
-          <TabsTrigger value="games" className="data-[state=active]:bg-[#00C853] data-[state=active]:text-white">
+        <TabsList className="grid w-full grid-cols-5 bg-[#00C853]/20">
+          <TabsTrigger value="games" className="data-[state=active]:bg-[#00C853] data-[state=active]:text-white text-xs sm:text-sm">
             🎮 משחקים
           </TabsTrigger>
-          <TabsTrigger value="bot" className="data-[state=active]:bg-[#00C853] data-[state=active]:text-white">
+          <TabsTrigger value="avatar" className="data-[state=active]:bg-[#00C853] data-[state=active]:text-white text-xs sm:text-sm">
+            🧍 אווטאר
+          </TabsTrigger>
+          <TabsTrigger value="bot" className="data-[state=active]:bg-[#00C853] data-[state=active]:text-white text-xs sm:text-sm">
             🤖 בוט
           </TabsTrigger>
-          <TabsTrigger value="chats" className="data-[state=active]:bg-[#00C853] data-[state=active]:text-white">
+          <TabsTrigger value="chats" className="data-[state=active]:bg-[#00C853] data-[state=active]:text-white text-xs sm:text-sm">
             💬 צ'אטים
           </TabsTrigger>
-          <TabsTrigger value="secret" className="data-[state=active]:bg-[#00C853] data-[state=active]:text-white">
+          <TabsTrigger value="secret" className="data-[state=active]:bg-[#00C853] data-[state=active]:text-white text-xs sm:text-sm">
             🔒 סודי
           </TabsTrigger>
         </TabsList>
@@ -93,6 +97,10 @@ export const PremiumClubTab = ({ userCode, userName }: PremiumClubTabProps) => {
               </div>
             </div>
           )}
+        </TabsContent>
+        
+        <TabsContent value="avatar" className="mt-6">
+          <Avatar3DTab />
         </TabsContent>
         
         <TabsContent value="bot" className="mt-6">

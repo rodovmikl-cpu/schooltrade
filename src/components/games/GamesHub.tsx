@@ -4,6 +4,7 @@ import { MathGame } from "@/components/games/MathGame";
 import { HebrewGame } from "@/components/games/HebrewGame";
 import { EnglishGame } from "@/components/games/EnglishGame";
 import { SchoolNews } from "@/components/games/SchoolNews";
+import { CountryFlagGame } from "@/components/games/CountryFlagGame";
 import { SnakeGame } from "@/components/SnakeGame";
 import { PremiumGameBadge } from "@/components/premium/PremiumGameBadge";
 import { isPremiumUser } from "@/lib/premium";
@@ -14,7 +15,7 @@ interface GamesHubProps {
   userName: string;
 }
 
-type GameKey = "menu" | "snake" | "crypto" | "math" | "hebrew" | "english" | "news";
+type GameKey = "menu" | "snake" | "crypto" | "math" | "hebrew" | "english" | "news" | "flags";
 
 const GAMES = [
   { key: "snake" as GameKey, label: "🐍 משחק הנחש", desc: "אסוף אוכל והתחמק מהקירות", color: "from-green-500/20 to-emerald-500/10 border-green-500/40 hover:border-green-400/70" },
@@ -22,6 +23,7 @@ const GAMES = [
   { key: "math" as GameKey, label: "🧮 מישחק מתמטי", desc: "25 שאלות מותאמות לרמת הכיתה שלך", color: "from-blue-500/20 to-indigo-500/10 border-blue-500/40 hover:border-blue-400/70" },
   { key: "hebrew" as GameKey, label: "📚 מישחק עברית", desc: "קרא סיפורים וענה על שאלות הבנה", color: "from-purple-500/20 to-violet-500/10 border-purple-500/40 hover:border-purple-400/70" },
   { key: "english" as GameKey, label: "🇬🇧 מישחק אנגלית", desc: "Read stories and answer comprehension questions", color: "from-cyan-500/20 to-sky-500/10 border-cyan-500/40 hover:border-cyan-400/70" },
+  { key: "flags" as GameKey, label: "🌍 מישחק המדינות", desc: "זהה דגלים ובחר את המדינה הנכונה", color: "from-teal-500/20 to-emerald-500/10 border-teal-500/40 hover:border-teal-400/70" },
   { key: "news" as GameKey, label: "📰 חדשות בית ספר", desc: "עדכונים וחדשות מבית הספר", color: "from-amber-500/20 to-orange-500/10 border-amber-500/40 hover:border-amber-400/70" },
 ];
 
@@ -57,6 +59,7 @@ export const GamesHub = ({ userCode, userName }: GamesHubProps) => {
           {activeGame === "hebrew" && <HebrewGame />}
           {activeGame === "english" && <EnglishGame />}
           {activeGame === "news" && <SchoolNews userCode={userCode} userName={userName} />}
+          {activeGame === "flags" && <CountryFlagGame />}
         </div>
       </div>
     );
