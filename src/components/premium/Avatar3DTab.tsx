@@ -1,6 +1,6 @@
 import { useState, useRef, Suspense } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Environment } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -212,7 +212,6 @@ export const Avatar3DTab = () => {
             <pointLight position={[-2, 3, 4]} intensity={0.5} color="#FFD700" />
             <Suspense fallback={null}>
               <AvatarModel config={config} />
-              <Environment preset="studio" />
             </Suspense>
             <OrbitControls
               enableZoom={false}
