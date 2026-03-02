@@ -196,36 +196,32 @@ const Index = () => {
 
       <main className={`container mx-auto px-4 py-8 ${isChristmasActive ? 'mt-10' : ''}`}>
         {!user ? (
-          <div
-            className="max-w-md mx-auto"
-            style={{ animation: "fadeSlideIn 0.4s ease-out" }}
-          >
-            <div className="bg-card rounded-2xl shadow-soft p-8 space-y-6">
-              {view === "login" ? (
-                <>
-                  <LoginForm onSuccess={handleLoginSuccess} />
-                  <Button variant="ghost" className="w-full hover:scale-[1.01] transition-transform" onClick={() => {
-                    if (!schoolVerified) {
-                      setView("register");
-                      return;
-                    }
-                    setView("register");
-                  }}>
-                    עדיין אין לך חשבון? הירשם כאן
-                  </Button>
-                </>
-              ) : !schoolVerified ? (
-                <SchoolCodeGate onVerified={() => setSchoolVerified(true)} />
-              ) : (
-                <>
-                  <RegistrationForm onSuccess={handleRegisterSuccess} />
-                  <Button variant="ghost" className="w-full hover:scale-[1.01] transition-transform" onClick={() => setView("login")}>
-                    כבר יש לך חשבון? התחבר כאן
-                  </Button>
-                </>
-              )}
+          !schoolVerified ? (
+            <SchoolCodeGate onVerified={() => setSchoolVerified(true)} />
+          ) : (
+            <div
+              className="max-w-md mx-auto"
+              style={{ animation: "fadeSlideIn 0.4s ease-out" }}
+            >
+              <div className="bg-card rounded-2xl shadow-soft p-8 space-y-6">
+                {view === "login" ? (
+                  <>
+                    <LoginForm onSuccess={handleLoginSuccess} />
+                    <Button variant="ghost" className="w-full hover:scale-[1.01] transition-transform" onClick={() => setView("register")}>
+                      עדיין אין לך חשבון? הירשם כאן
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <RegistrationForm onSuccess={handleRegisterSuccess} />
+                    <Button variant="ghost" className="w-full hover:scale-[1.01] transition-transform" onClick={() => setView("login")}>
+                      כבר יש לך חשבון? התחבר כאן
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )
         ) : (
           <div className="space-y-6">
             {/* Navigation */}
