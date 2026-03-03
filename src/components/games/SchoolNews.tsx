@@ -24,6 +24,11 @@ interface SchoolNewsProps {
 
 const PUBLISHER_CODE = "426671703";
 
+const sanitizeFileName = (name: string): string => {
+  const ext = name.split('.').pop() || 'jpg';
+  return `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+};
+
 export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,11 +83,14 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
     try {
       let imageUrl: string | null = null;
       if (newImageFile) {
-        const fileName = `news/${Date.now()}-${newImageFile.name}`;
-        const { error: uploadError } = await supabase.storage
+        const fileName = `news/${sanitizeFileName(newImageFile.name)}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
           .from("schooltrade-photos")
-          .upload(fileName, newImageFile, { contentType: newImageFile.type });
-        if (!uploadError) {
+          .upload(fileName, newImageFile, { contentType: newImageFile.type, cacheControl: "3600" });
+        if (uploadError) {
+          console.error("Upload error:", uploadError);
+          toast({ title: "שגיאה בהעלאת תמונה", description: uploadError.message, variant: "destructive" });
+        } else {
           const { data: urlData } = supabase.storage.from("schooltrade-photos").getPublicUrl(fileName);
           imageUrl = urlData.publicUrl;
         }
