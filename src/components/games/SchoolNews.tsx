@@ -39,7 +39,7 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const isPublisher = userCode === PUBLISHER_CODE;
+  const isPublisher = true; // All users can publish news
 
   useEffect(() => {
     fetchNews();
