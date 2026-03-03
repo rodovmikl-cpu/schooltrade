@@ -22,7 +22,7 @@ interface SchoolNewsProps {
   userName: string;
 }
 
-const PUBLISHER_CODE = "426671703";
+const ADMIN_CODE = "541285226";
 
 const sanitizeFileName = (name: string): string => {
   const ext = name.split('.').pop() || 'jpg';
@@ -39,10 +39,47 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const isPublisher = true; // All users can publish news
+  const isPublisher = userCode === ADMIN_CODE;
 
   useEffect(() => {
     fetchNews();
+
+    // Subscribe to realtime for notifications
+    const channel = supabase
+      .channel('school-news-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'school_news' },
+        (payload) => {
+          const newItem = payload.new as NewsItem;
+          setNews((prev) => [newItem, ...prev]);
+          // Show browser notification if not the author
+          if (newItem.author_code !== userCode && Notification.permission === 'granted') {
+            new Notification('📰 חדשות בית הספר', {
+              body: 'יש הודעה חדשה בחדשות בית הספר',
+              icon: '/favicon.png',
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userCode]);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.error('SW registration failed:', err);
+      });
+    }
   }, []);
 
   const fetchNews = async () => {
@@ -75,6 +112,10 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
   };
 
   const publishNews = async () => {
+    if (!isPublisher) {
+      toast({ title: "שגיאה", description: "אין לך הרשאה לפרסם חדשות", variant: "destructive" });
+      return;
+    }
     if (!newContent.trim()) {
       toast({ title: "שגיאה", description: "יש להזין תוכן לחדשות", variant: "destructive" });
       return;
@@ -84,7 +125,7 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
       let imageUrl: string | null = null;
       if (newImageFile) {
         const fileName = `news/${sanitizeFileName(newImageFile.name)}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from("schooltrade-photos")
           .upload(fileName, newImageFile, { contentType: newImageFile.type, cacheControl: "3600" });
         if (uploadError) {
@@ -103,10 +144,13 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
       setNewContent("");
       setNewImageFile(null);
       setNewImagePreview("");
-      fetchNews();
-    } catch (error) {
+      // Don't refetch - realtime will add it
+    } catch (error: any) {
       console.error("Error publishing news:", error);
-      toast({ title: "שגיאה", description: "לא הצלחנו לפרסם את החדשות", variant: "destructive" });
+      const msg = error?.message?.includes("row-level security")
+        ? "אין לך הרשאה לפרסם חדשות"
+        : "לא הצלחנו לפרסם את החדשות";
+      toast({ title: "שגיאה", description: msg, variant: "destructive" });
     } finally {
       setPublishing(false);
     }
@@ -114,26 +158,13 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
 
   const deleteNews = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from("school_news")
-        .delete()
-        .eq("id", id);
-
+      const { error } = await supabase.from("school_news").delete().eq("id", id);
       if (error) throw error;
-
-      toast({
-        title: "נמחק בהצלחה",
-        description: "החדשות נמחקו"
-      });
-
-      fetchNews();
+      toast({ title: "נמחק בהצלחה", description: "החדשות נמחקו" });
+      setNews((prev) => prev.filter((n) => n.id !== id));
     } catch (error) {
       console.error("Error deleting news:", error);
-      toast({
-        title: "שגיאה",
-        description: "לא הצלחנו למחוק את החדשות",
-        variant: "destructive"
-      });
+      toast({ title: "שגיאה", description: "לא הצלחנו למחוק את החדשות", variant: "destructive" });
     }
   };
 
@@ -160,8 +191,8 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
         <p className="text-muted-foreground">כל העדכונים והחדשות מבית הספר</p>
       </div>
 
-      {/* Publisher Panel */}
-      {isPublisher && (
+      {/* Publisher Panel - only for admin code */}
+      {isPublisher ? (
         <Card className="border-primary/50 bg-primary/5">
           <CardHeader className="pb-2">
             <p className="font-medium">📝 פרסום חדשות חדשות</p>
@@ -174,13 +205,11 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
               rows={4}
               className="resize-none"
             />
-            {/* Gallery image picker */}
             <div className="space-y-2">
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                capture={undefined}
                 onChange={handleImageSelect}
                 className="hidden"
               />
@@ -202,13 +231,15 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
                 </div>
               )}
             </div>
-            <Button
-              onClick={publishNews}
-              disabled={publishing || !newContent.trim()}
-              className="w-full"
-            >
+            <Button onClick={publishNews} disabled={publishing || !newContent.trim()} className="w-full">
               {publishing ? "מפרסם..." : "פרסם חדשות"}
             </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-muted">
+          <CardContent className="py-6 text-center text-muted-foreground">
+            <p>📖 רק מנהלים יכולים לפרסם חדשות</p>
           </CardContent>
         </Card>
       )}
@@ -228,9 +259,9 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
               <Card key={item.id} className="animate-fade-in overflow-hidden">
                 {item.image_url && (
                   <div className="w-full h-48 overflow-hidden">
-                    <img 
-                      src={item.image_url} 
-                      alt="News" 
+                    <img
+                      src={item.image_url}
+                      alt="News"
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none';
@@ -254,9 +285,9 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
                     {item.content}
                   </p>
                   {isPublisher && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       className="text-destructive hover:text-destructive"
                       onClick={() => deleteNews(item.id)}
                     >
