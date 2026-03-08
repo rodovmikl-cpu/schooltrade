@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { GamesHub } from "@/components/games/GamesHub";
 import { KeifTab } from "@/components/keif/KeifTab";
 import { SchoolNews } from "@/components/games/SchoolNews";
+import { PremiumCodeRedemption } from "@/components/PremiumCodeRedemption";
 import { playSound } from "@/lib/sounds";
 
 const PREMIUM_USERS = ["161221063", "752025692", "426671703"];
@@ -39,6 +40,7 @@ const Index = () => {
   const [hasLimitedChat, setHasLimitedChat] = useState(false);
   const [unreadLimitedChat, setUnreadLimitedChat] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [dbPremium, setDbPremium] = useState(false);
   const [schoolVerified, setSchoolVerified] = useState(() => sessionStorage.getItem("schoolVerified") === "true");
   const { isHalloweenActive } = useHalloween();
   const { isChristmasActive, isChristmasBackgroundOnly } = useChristmas();
@@ -84,6 +86,18 @@ const Index = () => {
     }
   };
 
+  const checkDbPremium = async (userCode: string) => {
+    try {
+      // Run expiration check
+      await supabase.rpc("expire_old_subscriptions");
+      // Check is_premium from DB
+      const { data } = await supabase.from("users").select("is_premium").eq("code", userCode).single();
+      setDbPremium(data?.is_premium || false);
+    } catch (e) {
+      console.error("Error checking premium:", e);
+    }
+  };
+
   useEffect(() => {
     const savedCode = sessionStorage.getItem("userCode");
     const savedName = sessionStorage.getItem("userName");
@@ -92,6 +106,7 @@ const Index = () => {
       setUser({ code: savedCode, name: savedName, role: savedRole || "user" });
       setView("posts");
       checkLimitedChat(savedCode);
+      checkDbPremium(savedCode);
     }
   }, []);
 
@@ -113,6 +128,7 @@ const Index = () => {
     setView("posts");
     playSound("enter");
     checkLimitedChat(code);
+    checkDbPremium(code);
   };
 
   const handleLogout = () => {
@@ -130,7 +146,7 @@ const Index = () => {
   };
 
   const isAdmin = user?.code === "admin" || user?.code === "michaelrodov" || user?.role === "admin";
-  const isPremiumUser = PREMIUM_USERS.includes(user?.code || "");
+  const isPremiumUser = PREMIUM_USERS.includes(user?.code || "") || dbPremium;
 
   const getBackgroundClass = () => {
     if (isHalloweenActive) return 'bg-gradient-to-br from-orange-950 via-purple-950 to-black';
@@ -273,7 +289,14 @@ const Index = () => {
               )}
             </div>
 
-            {/* Content with transition */}
+            {/* Premium Code Redemption - show for non-premium users */}
+            {!isPremiumUser && (
+              <PremiumCodeRedemption
+                userCode={user.code}
+                onPremiumActivated={() => checkDbPremium(user.code)}
+              />
+            )}
+
             <div
               key={view}
               style={{ animation: "fadeSlideIn 0.35s ease-out" }}
