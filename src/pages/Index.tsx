@@ -40,6 +40,7 @@ const Index = () => {
   const [hasLimitedChat, setHasLimitedChat] = useState(false);
   const [unreadLimitedChat, setUnreadLimitedChat] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [dbPremium, setDbPremium] = useState(false);
   const [schoolVerified, setSchoolVerified] = useState(() => sessionStorage.getItem("schoolVerified") === "true");
   const { isHalloweenActive } = useHalloween();
   const { isChristmasActive, isChristmasBackgroundOnly } = useChristmas();
