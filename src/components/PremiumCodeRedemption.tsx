@@ -31,44 +31,31 @@ export const PremiumCodeRedemption = ({ userCode, onPremiumActivated }: PremiumC
 
     setLoading(true);
     try {
-      if (duration === "permanent") {
-        // Permanent premium
-        const { error } = await supabase
-          .from("users")
-          .update({ is_premium: true })
-          .eq("code", userCode);
-        if (error) throw error;
+      const duration = PREMIUM_CODES[code.trim()];
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + duration);
 
-        toast({ title: "🌟 חבר מועדון לצמיתות!", description: "קיבלת גישת חבר מועדון קבועה." });
-      } else {
-        // Temporary premium
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + duration);
+      const { error: userError } = await supabase
+        .from("users")
+        .update({ is_premium: true })
+        .eq("code", userCode);
+      if (userError) throw userError;
 
-        // Set is_premium = true
-        const { error: userError } = await supabase
-          .from("users")
-          .update({ is_premium: true })
-          .eq("code", userCode);
-        if (userError) throw userError;
-
-        // Create subscription record
-        const { error: subError } = await supabase
-          .from("subscriptions")
-          .insert({
-            user_code: userCode,
-            expires_at: expiresAt.toISOString(),
-            payment_provider: "premium_code",
-            transaction_id: code.trim(),
-            status: "active",
-          });
-        if (subError) throw subError;
-
-        toast({
-          title: `🌟 חבר מועדון ל-${duration} ימים!`,
-          description: `המנוי שלך יפוג בתאריך ${expiresAt.toLocaleDateString("he-IL")}`,
+      const { error: subError } = await supabase
+        .from("subscriptions")
+        .insert({
+          user_code: userCode,
+          expires_at: expiresAt.toISOString(),
+          payment_provider: "premium_code",
+          transaction_id: code.trim(),
+          status: "active",
         });
-      }
+      if (subError) throw subError;
+
+      toast({
+        title: `🌟 חבר מועדון ל-${duration} ימים!`,
+        description: `המנוי שלך יפוג בתאריך ${expiresAt.toLocaleDateString("he-IL")}`,
+      });
 
       setCode("");
       onPremiumActivated();
