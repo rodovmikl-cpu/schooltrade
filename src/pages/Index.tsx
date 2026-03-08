@@ -146,7 +146,7 @@ const Index = () => {
   };
 
   const isAdmin = user?.code === "admin" || user?.code === "michaelrodov" || user?.role === "admin";
-  const isPremiumUser = PREMIUM_USERS.includes(user?.code || "");
+  const isPremiumUser = PREMIUM_USERS.includes(user?.code || "") || dbPremium;
 
   const getBackgroundClass = () => {
     if (isHalloweenActive) return 'bg-gradient-to-br from-orange-950 via-purple-950 to-black';
