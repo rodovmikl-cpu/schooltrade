@@ -86,6 +86,18 @@ const Index = () => {
     }
   };
 
+  const checkDbPremium = async (userCode: string) => {
+    try {
+      // Run expiration check
+      await supabase.rpc("expire_old_subscriptions");
+      // Check is_premium from DB
+      const { data } = await supabase.from("users").select("is_premium").eq("code", userCode).single();
+      setDbPremium(data?.is_premium || false);
+    } catch (e) {
+      console.error("Error checking premium:", e);
+    }
+  };
+
   useEffect(() => {
     const savedCode = sessionStorage.getItem("userCode");
     const savedName = sessionStorage.getItem("userName");
@@ -94,6 +106,7 @@ const Index = () => {
       setUser({ code: savedCode, name: savedName, role: savedRole || "user" });
       setView("posts");
       checkLimitedChat(savedCode);
+      checkDbPremium(savedCode);
     }
   }, []);
 
