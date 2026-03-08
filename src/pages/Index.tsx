@@ -128,6 +128,7 @@ const Index = () => {
     setView("posts");
     playSound("enter");
     checkLimitedChat(code);
+    checkDbPremium(code);
   };
 
   const handleLogout = () => {
