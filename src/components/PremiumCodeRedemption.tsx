@@ -9,11 +9,10 @@ interface PremiumCodeRedemptionProps {
   onPremiumActivated: () => void;
 }
 
-const PREMIUM_CODES: Record<string, number | "permanent"> = {
+const PREMIUM_CODES: Record<string, number> = {
   "259406986": 14,
   "779973275": 7,
   "257313100": 7,
-  "541285226": "permanent",
 };
 
 export const PremiumCodeRedemption = ({ userCode, onPremiumActivated }: PremiumCodeRedemptionProps) => {
