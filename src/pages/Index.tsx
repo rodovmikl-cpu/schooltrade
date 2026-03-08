@@ -289,7 +289,14 @@ const Index = () => {
               )}
             </div>
 
-            {/* Content with transition */}
+            {/* Premium Code Redemption - show for non-premium users */}
+            {!isPremiumUser && (
+              <PremiumCodeRedemption
+                userCode={user.code}
+                onPremiumActivated={() => checkDbPremium(user.code)}
+              />
+            )}
+
             <div
               key={view}
               style={{ animation: "fadeSlideIn 0.35s ease-out" }}
