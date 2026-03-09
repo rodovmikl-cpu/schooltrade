@@ -86,10 +86,40 @@ const Index = () => {
     }
   };
 
+  const AUTO_PREMIUM_CODES: Record<string, number | "permanent"> = {
+    "259406986": 14,
+    "779973275": 7,
+    "257313100": 7,
+    "541285226": "permanent",
+  };
+
   const checkDbPremium = async (userCode: string) => {
     try {
       // Run expiration check
       await supabase.rpc("expire_old_subscriptions");
+
+      // Auto-activate premium if user code matches
+      const autoDuration = AUTO_PREMIUM_CODES[userCode];
+      if (autoDuration) {
+        const { data: userData } = await supabase.from("users").select("is_premium").eq("code", userCode).single();
+        if (!userData?.is_premium) {
+          if (autoDuration === "permanent") {
+            await supabase.from("users").update({ is_premium: true }).eq("code", userCode);
+          } else {
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + autoDuration);
+            await supabase.from("users").update({ is_premium: true }).eq("code", userCode);
+            await supabase.from("subscriptions").insert({
+              user_code: userCode,
+              expires_at: expiresAt.toISOString(),
+              payment_provider: "auto_code",
+              transaction_id: userCode,
+              status: "active",
+            });
+          }
+        }
+      }
+
       // Check is_premium from DB
       const { data } = await supabase.from("users").select("is_premium").eq("code", userCode).single();
       setDbPremium(data?.is_premium || false);
