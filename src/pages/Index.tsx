@@ -319,13 +319,6 @@ const Index = () => {
               )}
             </div>
 
-            {/* Premium Code Redemption - show for non-premium users */}
-            {!isPremiumUser && (
-              <PremiumCodeRedemption
-                userCode={user.code}
-                onPremiumActivated={() => checkDbPremium(user.code)}
-              />
-            )}
 
             <div
               key={view}
