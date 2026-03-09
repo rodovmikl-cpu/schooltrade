@@ -27,7 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { GamesHub } from "@/components/games/GamesHub";
 import { KeifTab } from "@/components/keif/KeifTab";
 import { SchoolNews } from "@/components/games/SchoolNews";
-import { PremiumCodeRedemption } from "@/components/PremiumCodeRedemption";
+
 import { playSound } from "@/lib/sounds";
 
 const PREMIUM_USERS = ["161221063", "752025692", "426671703"];
