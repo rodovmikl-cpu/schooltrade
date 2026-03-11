@@ -19,7 +19,7 @@ export const SnakeGame = () => {
   const [gameOver, setGameOver] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [speed, setSpeed] = useState(INITIAL_SPEED);
-  const gameLoopRef = useRef<NodeJS.Timeout>();
+  const gameLoopRef = useRef<ReturnType<typeof setInterval>>();
 
   const generateApple = useCallback((currentSnake: Position[]) => {
     let newApple: Position;

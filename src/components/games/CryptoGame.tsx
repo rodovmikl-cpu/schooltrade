@@ -261,8 +261,8 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
     const saved = localStorage.getItem(SOUND_ENABLED_KEY);
     return saved !== 'false'; // Default to true
   });
-  const spikeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const surgeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const spikeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const surgeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const eventSoundPlayedRef = useRef<boolean>(false);
   const { toast } = useToast();
 
