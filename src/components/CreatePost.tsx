@@ -264,7 +264,7 @@ const CreatePost = ({ userCode, userName, onSuccess }: CreatePostProps) => {
                 <div className="grid grid-cols-2 gap-4">
                   <Button
                     type="button"
-                    onClick={startCamera}
+                    onClick={() => startCamera()}
                     variant="outline"
                     className="h-32 border-dashed flex-col"
                   >
