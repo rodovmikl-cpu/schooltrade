@@ -18,6 +18,7 @@ const CreatePost = ({ userCode, userName, onSuccess }: CreatePostProps) => {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [postingMode, setPostingMode] = useState<"regular" | "auction">("regular");
@@ -56,9 +57,17 @@ const CreatePost = ({ userCode, userName, onSuccess }: CreatePostProps) => {
       const ctx = canvas.getContext("2d");
       if (ctx) {
         ctx.drawImage(videoRef.current, 0, 0);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-        setPhoto(dataUrl);
-        stopCamera();
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              setPhotoBlob(blob);
+              setPhoto(URL.createObjectURL(blob));
+            }
+            stopCamera();
+          },
+          "image/jpeg",
+          0.85
+        );
       }
     }
   };
@@ -84,13 +93,8 @@ const CreatePost = ({ userCode, userName, onSuccess }: CreatePostProps) => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setPhoto(event.target.result as string);
-      }
-    };
-    reader.readAsDataURL(file);
+    setPhotoBlob(file);
+    setPhoto(URL.createObjectURL(file));
   };
 
   const triggerFileInput = () => {
@@ -109,7 +113,7 @@ const CreatePost = ({ userCode, userName, onSuccess }: CreatePostProps) => {
       return;
     }
 
-    if (!photo) {
+    if (!photo || !photoBlob) {
       toast({
         title: "שגיאה",
         description: "אנא הוסף תמונה",
@@ -122,23 +126,25 @@ const CreatePost = ({ userCode, userName, onSuccess }: CreatePostProps) => {
     setUploadProgress(0);
 
     try {
-      // Convert dataURL to blob
-      const response = await fetch(photo);
-      const blob = await response.blob();
-      
       const postId = crypto.randomUUID();
-      const fileName = `posts/${postId}.jpg`;
+      const ext = photoBlob.type === "image/png" ? "png" : "jpg";
+      const fileName = `posts/${postId}.${ext}`;
+      const contentType = photoBlob.type || "image/jpeg";
 
       setUploadProgress(30);
 
-      // Upload to storage
+      // Upload raw blob/file directly to storage (avoids preview fetch proxy issues)
       const { error: uploadError } = await supabase.storage
         .from("schooltrade-photos")
-        .upload(fileName, blob, {
-          contentType: "image/jpeg",
+        .upload(fileName, photoBlob, {
+          contentType,
+          upsert: false,
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Storage upload error:", uploadError);
+        throw new Error(uploadError.message || "שגיאה בהעלאת התמונה לאחסון");
+      }
 
       setUploadProgress(60);
 
@@ -175,7 +181,9 @@ const CreatePost = ({ userCode, userName, onSuccess }: CreatePostProps) => {
 
       setDescription("");
       setPrice("");
+      if (photo?.startsWith("blob:")) URL.revokeObjectURL(photo);
       setPhoto(null);
+      setPhotoBlob(null);
       setPostingMode("regular");
       onSuccess();
     } catch (error: any) {
@@ -279,7 +287,11 @@ const CreatePost = ({ userCode, userName, onSuccess }: CreatePostProps) => {
                 <img src={photo} alt="Preview" className="w-full rounded-lg" />
                 <Button
                   type="button"
-                  onClick={() => setPhoto(null)}
+                  onClick={() => {
+                    if (photo?.startsWith("blob:")) URL.revokeObjectURL(photo);
+                    setPhoto(null);
+                    setPhotoBlob(null);
+                  }}
                   variant="outline"
                   className="w-full"
                 >
