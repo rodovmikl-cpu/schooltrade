@@ -270,19 +270,56 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
                 onChange={handleImageSelect}
                 className="hidden"
               />
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                🖼️ {newImageFile ? "תמונה נבחרה - לחץ לשינוי" : "בחר תמונה מהגלריה"}
-              </Button>
-              {newImagePreview && (
+              {!cameraActive && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    🖼️ {newImageFile ? "החלף תמונה" : "מהגלריה"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={startCamera}
+                  >
+                    📷 צלם תמונה
+                  </Button>
+                </div>
+              )}
+
+              {cameraActive && (
+                <div className="space-y-2">
+                  <div className="relative rounded-lg overflow-hidden bg-black">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-64 object-cover"
+                    />
+                    <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                      <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                      מצלמה פעילה
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="button" onClick={capturePhoto} className="flex-1">
+                      📸 צלם
+                    </Button>
+                    <Button type="button" variant="outline" onClick={stopCamera}>
+                      ביטול
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {newImagePreview && !cameraActive && (
                 <div className="relative rounded-lg overflow-hidden">
                   <img src={newImagePreview} alt="תצוגה מקדימה" className="w-full h-40 object-cover rounded-lg" />
                   <button
-                    onClick={() => { setNewImageFile(null); setNewImagePreview(""); }}
+                    onClick={() => { setNewImageFile(null); if (newImagePreview) URL.revokeObjectURL(newImagePreview); setNewImagePreview(""); }}
                     className="absolute top-2 left-2 bg-black/60 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
                   >✕</button>
                 </div>
