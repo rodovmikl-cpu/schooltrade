@@ -24,29 +24,57 @@ const CreatePost = ({ userCode, userName, onSuccess }: CreatePostProps) => {
   const [postingMode, setPostingMode] = useState<"regular" | "auction">("regular");
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraFallbackRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const { toast } = useToast();
 
-  const startCamera = async () => {
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-        audio: false,
-      });
-      setStream(mediaStream);
+  const attachStream = (mediaStream: MediaStream) => {
+    setStream(mediaStream);
+    setCameraActive(true);
+    // Defer to next tick so the <video> element exists in DOM
+    setTimeout(() => {
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        videoRef.current.play().catch(() => {});
       }
-      setCameraActive(true);
-    } catch (error) {
-      console.error("Camera error:", error);
-      toast({
-        title: "שגיאה בפתיחת המצלמה",
-        description: "לא ניתן לגשת למצלמה",
-        variant: "destructive",
-      });
+    }, 50);
+  };
+
+  const startCamera = (mode: "environment" | "user" = facingMode) => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      // Fallback to native capture input
+      cameraFallbackRef.current?.click();
+      return;
     }
+    setFacingMode(mode);
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: mode }, audio: false })
+      .then(attachStream)
+      .catch((error) => {
+        console.error("Camera error:", error);
+        // Try without facingMode constraint
+        navigator.mediaDevices
+          .getUserMedia({ video: true, audio: false })
+          .then(attachStream)
+          .catch((err2) => {
+            console.error("Camera fallback error:", err2);
+            toast({
+              title: "שגיאה בפתיחת המצלמה",
+              description: "פותח מצלמת מערכת במקום",
+              variant: "destructive",
+            });
+            cameraFallbackRef.current?.click();
+          });
+      });
+  };
+
+  const switchCamera = () => {
+    const next = facingMode === "environment" ? "user" : "environment";
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    setStream(null);
+    startCamera(next);
   };
 
   const capturePhoto = () => {
@@ -236,7 +264,7 @@ const CreatePost = ({ userCode, userName, onSuccess }: CreatePostProps) => {
                 <div className="grid grid-cols-2 gap-4">
                   <Button
                     type="button"
-                    onClick={startCamera}
+                    onClick={() => startCamera()}
                     variant="outline"
                     className="h-32 border-dashed flex-col"
                   >
@@ -260,20 +288,37 @@ const CreatePost = ({ userCode, userName, onSuccess }: CreatePostProps) => {
                   onChange={handleFileSelect}
                   className="hidden"
                 />
+                <input
+                  ref={cameraFallbackRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
               </>
             )}
 
             {cameraActive && (
               <div className="space-y-4">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full rounded-lg"
-                />
+                <div className="relative bg-black rounded-lg overflow-hidden">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full rounded-lg"
+                  />
+                  <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+                    ● מצלמה פעילה
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <Button type="button" onClick={capturePhoto} className="flex-1">
                     📸 צלם
+                  </Button>
+                  <Button type="button" onClick={switchCamera} variant="outline">
+                    🔄
                   </Button>
                   <Button type="button" onClick={stopCamera} variant="outline">
                     ביטול
