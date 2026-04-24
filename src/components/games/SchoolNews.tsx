@@ -85,6 +85,15 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
     }
   }, []);
 
+  // Cleanup camera + preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStream) cameraStream.getTracks().forEach((t) => t.stop());
+      if (newImagePreview) URL.revokeObjectURL(newImagePreview);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fetchNews = async () => {
     try {
       const { data, error } = await supabase
