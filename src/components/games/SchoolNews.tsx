@@ -36,7 +36,10 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
   const [newImagePreview, setNewImagePreview] = useState<string>("");
   const [publishing, setPublishing] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const { toast } = useToast();
 
   const isPublisher = userCode === ADMIN_CODE;
