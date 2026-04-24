@@ -288,20 +288,37 @@ const CreatePost = ({ userCode, userName, onSuccess }: CreatePostProps) => {
                   onChange={handleFileSelect}
                   className="hidden"
                 />
+                <input
+                  ref={cameraFallbackRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
               </>
             )}
 
             {cameraActive && (
               <div className="space-y-4">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full rounded-lg"
-                />
+                <div className="relative bg-black rounded-lg overflow-hidden">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full rounded-lg"
+                  />
+                  <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+                    ● מצלמה פעילה
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <Button type="button" onClick={capturePhoto} className="flex-1">
                     📸 צלם
+                  </Button>
+                  <Button type="button" onClick={switchCamera} variant="outline">
+                    🔄
                   </Button>
                   <Button type="button" onClick={stopCamera} variant="outline">
                     ביטול
