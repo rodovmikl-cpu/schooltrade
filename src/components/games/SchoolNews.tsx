@@ -109,9 +109,63 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "שגיאה", description: "אנא בחר קובץ תמונה", variant: "destructive" });
+      return;
+    }
     setNewImageFile(file);
+    if (newImagePreview) URL.revokeObjectURL(newImagePreview);
     const url = URL.createObjectURL(file);
     setNewImagePreview(url);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false,
+      });
+      setCameraStream(stream);
+      setCameraActive(true);
+      // Attach stream after render
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 50);
+    } catch (err) {
+      console.error("Camera error:", err);
+      toast({ title: "שגיאה במצלמה", description: "לא ניתן לגשת למצלמה", variant: "destructive" });
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((t) => t.stop());
+      setCameraStream(null);
+    }
+    setCameraActive(false);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" });
+      setNewImageFile(file);
+      if (newImagePreview) URL.revokeObjectURL(newImagePreview);
+      setNewImagePreview(URL.createObjectURL(blob));
+      stopCamera();
+    }, "image/jpeg", 0.9);
   };
 
   const publishNews = async () => {
