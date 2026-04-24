@@ -36,7 +36,10 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
   const [newImagePreview, setNewImagePreview] = useState<string>("");
   const [publishing, setPublishing] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const { toast } = useToast();
 
   const isPublisher = userCode === ADMIN_CODE;
@@ -82,6 +85,15 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
     }
   }, []);
 
+  // Cleanup camera + preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStream) cameraStream.getTracks().forEach((t) => t.stop());
+      if (newImagePreview) URL.revokeObjectURL(newImagePreview);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fetchNews = async () => {
     try {
       const { data, error } = await supabase
@@ -106,9 +118,63 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "שגיאה", description: "אנא בחר קובץ תמונה", variant: "destructive" });
+      return;
+    }
     setNewImageFile(file);
+    if (newImagePreview) URL.revokeObjectURL(newImagePreview);
     const url = URL.createObjectURL(file);
     setNewImagePreview(url);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false,
+      });
+      setCameraStream(stream);
+      setCameraActive(true);
+      // Attach stream after render
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 50);
+    } catch (err) {
+      console.error("Camera error:", err);
+      toast({ title: "שגיאה במצלמה", description: "לא ניתן לגשת למצלמה", variant: "destructive" });
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((t) => t.stop());
+      setCameraStream(null);
+    }
+    setCameraActive(false);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" });
+      setNewImageFile(file);
+      if (newImagePreview) URL.revokeObjectURL(newImagePreview);
+      setNewImagePreview(URL.createObjectURL(blob));
+      stopCamera();
+    }, "image/jpeg", 0.9);
   };
 
   const publishNews = async () => {
@@ -213,19 +279,56 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
                 onChange={handleImageSelect}
                 className="hidden"
               />
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                🖼️ {newImageFile ? "תמונה נבחרה - לחץ לשינוי" : "בחר תמונה מהגלריה"}
-              </Button>
-              {newImagePreview && (
+              {!cameraActive && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    🖼️ {newImageFile ? "החלף תמונה" : "מהגלריה"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={startCamera}
+                  >
+                    📷 צלם תמונה
+                  </Button>
+                </div>
+              )}
+
+              {cameraActive && (
+                <div className="space-y-2">
+                  <div className="relative rounded-lg overflow-hidden bg-black">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-64 object-cover"
+                    />
+                    <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                      <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                      מצלמה פעילה
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="button" onClick={capturePhoto} className="flex-1">
+                      📸 צלם
+                    </Button>
+                    <Button type="button" variant="outline" onClick={stopCamera}>
+                      ביטול
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {newImagePreview && !cameraActive && (
                 <div className="relative rounded-lg overflow-hidden">
                   <img src={newImagePreview} alt="תצוגה מקדימה" className="w-full h-40 object-cover rounded-lg" />
                   <button
-                    onClick={() => { setNewImageFile(null); setNewImagePreview(""); }}
+                    onClick={() => { setNewImageFile(null); if (newImagePreview) URL.revokeObjectURL(newImagePreview); setNewImagePreview(""); }}
                     className="absolute top-2 left-2 bg-black/60 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
                   >✕</button>
                 </div>
