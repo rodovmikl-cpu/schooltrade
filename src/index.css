@@ -200,11 +200,51 @@ All colors MUST be HSL.
     min-height: 100vh;
   }
 
-  /* Smooth global transitions for the redesign */
-  button, a, [role="tab"], .card, [data-state] {
-    transition: background-color 200ms ease, color 200ms ease,
-                border-color 200ms ease, box-shadow 250ms ease,
-                transform 200ms ease, opacity 200ms ease;
+  /* Smooth global transitions */
+  button, a, [role="tab"], .card, [data-state], input, textarea, select {
+    transition: background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+                transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Premium button micro-interactions */
+  button:not(:disabled):hover {
+    transform: translateY(-1px) scale(1.02);
+  }
+  button:not(:disabled):active {
+    transform: translateY(0) scale(0.97);
+    transition-duration: 90ms;
+  }
+
+  /* Card / container hover lift */
+  .card, [class*="rounded-"][class*="border"] {
+    will-change: transform;
+  }
+
+  /* Input focus glow */
+  input:focus-visible, textarea:focus-visible, select:focus-visible {
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.25),
+                0 0 18px hsl(var(--primary) / 0.18);
+  }
+
+  /* Headings entrance */
+  h1, h2, h3 {
+    animation: fadeSlideIn 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  h2 { animation-delay: 60ms; }
+  h3 { animation-delay: 120ms; }
+
+  /* Page-level fade for the app root */
+  #root {
+    animation: fadeSlideIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Tab content smooth swap */
+  [role="tabpanel"] {
+    animation: fadeSlideIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   /* Custom scrollbar — Discord-like */
@@ -217,11 +257,32 @@ All colors MUST be HSL.
   }
   ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.7); }
 
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+
   /* RTL support for Hebrew */
   [dir="rtl"] {
     direction: rtl;
   }
 }
+
+/* Reveal-on-scroll keyframe (used via IntersectionObserver below) */
+@keyframes revealUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes softPulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.0); }
+  50%      { box-shadow: 0 0 18px 2px hsl(var(--primary) / 0.25); }
+}
+
 
 @keyframes fadeSlideIn {
   from {
