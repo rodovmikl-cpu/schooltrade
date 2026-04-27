@@ -85,53 +85,79 @@ function AvatarMesh({ url }: { url: string }) {
   );
 }
 
-export const Avatar3DTab = () => {
+export const Avatar3DTab = ({ userCode }: Avatar3DTabProps) => {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(() => {
     return localStorage.getItem(STORAGE_KEY);
   });
   const [creatorOpen, setCreatorOpen] = useState(false);
+  const [creatorStatus, setCreatorStatus] = useState<CreatorStatus>("idle");
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const persistAvatar = useCallback(async (url: string) => {
+    setAvatarUrl(url);
+    localStorage.setItem(STORAGE_KEY, url);
+
+    if (userCode) {
+      await (supabase as any)
+        .from("user_avatars")
+        .upsert({ user_code: userCode, avatar_url: url }, { onConflict: "user_code" });
+    }
+  }, [userCode]);
+
+  useEffect(() => {
+    if (!userCode) return;
+
+    let active = true;
+    (supabase as any)
+      .from("user_avatars")
+      .select("avatar_url")
+      .eq("user_code", userCode)
+      .maybeSingle()
+      .then(({ data }: { data: { avatar_url?: string } | null }) => {
+        if (active && data?.avatar_url && isValidAvatarUrl(data.avatar_url)) {
+          setAvatarUrl(data.avatar_url);
+          localStorage.setItem(STORAGE_KEY, data.avatar_url);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [userCode]);
+
+  useEffect(() => {
+    if (!creatorOpen) {
+      setCreatorStatus("idle");
+      return;
+    }
+
+    setCreatorStatus("loading");
+    const timeout = window.setTimeout(() => setCreatorStatus((status) => status === "loading" ? "error" : status), 18000);
+    return () => window.clearTimeout(timeout);
+  }, [creatorOpen]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      const raw = event.data;
-      let url: string | null = null;
+      const json = parseFrameMessage(event.data);
+      const eventName = json?.eventName || json?.type;
 
-      if (typeof raw === "string") {
-        if (raw.includes(".glb")) {
-          url = raw;
-        } else {
-          try {
-            const json = JSON.parse(raw);
-            if (json?.eventName === "v1.avatar.exported" && json?.data?.url) {
-              url = json.data.url;
-            }
-            if (json?.source === "readyplayerme" && json?.eventName === "v1.frame.ready") {
-              // tell iframe to subscribe to events
-              iframeRef.current?.contentWindow?.postMessage(
-                JSON.stringify({
-                  target: "readyplayerme",
-                  type: "subscribe",
-                  eventName: "v1.**",
-                }),
-                "*"
-              );
-            }
-          } catch {
-            // ignore
-          }
-        }
+      if (json?.source === "readyplayerme" && eventName === "v1.frame.ready") {
+        setCreatorStatus("ready");
+        iframeRef.current?.contentWindow?.postMessage(
+          JSON.stringify({ target: "readyplayerme", type: "subscribe", eventName: "v1.**" }),
+          "*"
+        );
       }
 
+      const url = extractAvatarUrl(event.data);
       if (url) {
-        setAvatarUrl(url);
-        localStorage.setItem(STORAGE_KEY, url);
+        persistAvatar(url);
         setCreatorOpen(false);
       }
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, []);
+  }, [persistAvatar]);
 
   const resetAvatar = () => {
     localStorage.removeItem(STORAGE_KEY);
