@@ -247,6 +247,19 @@ All colors MUST be HSL.
     animation: fadeSlideIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
+  /* Active tab glow */
+  [role="tab"][data-state="active"],
+  [role="tab"][aria-selected="true"] {
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.35),
+                0 6px 18px -6px hsl(var(--primary) / 0.45);
+  }
+
+  /* Primary button soft text glow on hover */
+  button.bg-primary:hover,
+  .bg-primary > button:hover {
+    text-shadow: 0 0 10px hsl(var(--primary-foreground) / 0.45);
+  }
+
   /* Custom scrollbar — Discord-like */
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: hsl(var(--background)); }
