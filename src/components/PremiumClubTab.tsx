@@ -100,7 +100,7 @@ export const PremiumClubTab = ({ userCode, userName }: PremiumClubTabProps) => {
         </TabsContent>
         
         <TabsContent value="avatar" className="mt-6">
-          <Avatar3DTab />
+          <Avatar3DTab userCode={userCode} />
         </TabsContent>
         
         <TabsContent value="bot" className="mt-6">

@@ -1,13 +1,56 @@
-import { useState, useRef, Suspense, useEffect, Component, ReactNode } from "react";
+import { useState, useRef, Suspense, useEffect, Component, ReactNode, useCallback } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF } from "@react-three/drei";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
 import * as THREE from "three";
 
-const RPM_SUBDOMAIN = "demo";
+const READY_PLAYER_ME_EMBED_URL = "https://readyplayer.me/avatar?frameApi&clearCache";
 const STORAGE_KEY = "rpm_avatar_url";
+type CreatorStatus = "idle" | "loading" | "ready" | "error";
+
+interface Avatar3DTabProps {
+  userCode?: string;
+}
+
+const isValidAvatarUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      (url.hostname.endsWith("readyplayer.me") || value.includes(".glb") || value.includes(".png"))
+    );
+  } catch {
+    return false;
+  }
+};
+
+const parseFrameMessage = (raw: unknown): Record<string, any> | null => {
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return raw && typeof raw === "object" ? (raw as Record<string, any>) : null;
+};
+
+const extractAvatarUrl = (raw: unknown) => {
+  if (typeof raw === "string" && isValidAvatarUrl(raw)) return raw;
+  const data = parseFrameMessage(raw);
+  const candidates = [
+    data?.data?.url,
+    data?.data?.avatarUrl,
+    data?.url,
+    data?.avatarUrl,
+    data?.avatar?.url,
+  ];
+  return candidates.find((candidate): candidate is string => typeof candidate === "string" && isValidAvatarUrl(candidate)) || null;
+};
 
 class AvatarErrorBoundary extends Component<
   { children: ReactNode; onError: () => void },
@@ -42,53 +85,83 @@ function AvatarMesh({ url }: { url: string }) {
   );
 }
 
-export const Avatar3DTab = () => {
+export const Avatar3DTab = ({ userCode }: Avatar3DTabProps) => {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(() => {
     return localStorage.getItem(STORAGE_KEY);
   });
   const [creatorOpen, setCreatorOpen] = useState(false);
+  const [creatorStatus, setCreatorStatus] = useState<CreatorStatus>("idle");
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const persistAvatar = useCallback(async (url: string) => {
+    setAvatarUrl(url);
+    localStorage.setItem(STORAGE_KEY, url);
+
+    if (userCode) {
+      try {
+        await (supabase as any)
+          .from("user_avatars")
+          .upsert({ user_code: userCode, avatar_url: url }, { onConflict: "user_code" });
+      } catch (error) {
+        console.error("Error saving avatar:", error);
+      }
+    }
+  }, [userCode]);
+
+  useEffect(() => {
+    if (!userCode) return;
+
+    let active = true;
+    (supabase as any)
+      .from("user_avatars")
+      .select("avatar_url")
+      .eq("user_code", userCode)
+      .maybeSingle()
+      .then(({ data }: { data: { avatar_url?: string } | null }) => {
+        if (active && data?.avatar_url && isValidAvatarUrl(data.avatar_url)) {
+          setAvatarUrl(data.avatar_url);
+          localStorage.setItem(STORAGE_KEY, data.avatar_url);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [userCode]);
+
+  useEffect(() => {
+    if (!creatorOpen) {
+      setCreatorStatus("idle");
+      return;
+    }
+
+    setCreatorStatus("loading");
+    const timeout = window.setTimeout(() => setCreatorStatus((status) => status === "loading" ? "error" : status), 18000);
+    return () => window.clearTimeout(timeout);
+  }, [creatorOpen]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      const raw = event.data;
-      let url: string | null = null;
+      const json = parseFrameMessage(event.data);
+      const eventName = json?.eventName || json?.type;
 
-      if (typeof raw === "string") {
-        if (raw.includes(".glb")) {
-          url = raw;
-        } else {
-          try {
-            const json = JSON.parse(raw);
-            if (json?.eventName === "v1.avatar.exported" && json?.data?.url) {
-              url = json.data.url;
-            }
-            if (json?.source === "readyplayerme" && json?.eventName === "v1.frame.ready") {
-              // tell iframe to subscribe to events
-              iframeRef.current?.contentWindow?.postMessage(
-                JSON.stringify({
-                  target: "readyplayerme",
-                  type: "subscribe",
-                  eventName: "v1.**",
-                }),
-                "*"
-              );
-            }
-          } catch {
-            // ignore
-          }
-        }
+      if (json?.source === "readyplayerme" && eventName === "v1.frame.ready") {
+        setCreatorStatus("ready");
+        iframeRef.current?.contentWindow?.postMessage(
+          JSON.stringify({ target: "readyplayerme", type: "subscribe", eventName: "v1.**" }),
+          "*"
+        );
       }
 
+      const url = extractAvatarUrl(event.data);
       if (url) {
-        setAvatarUrl(url);
-        localStorage.setItem(STORAGE_KEY, url);
+        void persistAvatar(url);
         setCreatorOpen(false);
       }
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, []);
+  }, [persistAvatar]);
 
   const resetAvatar = () => {
     localStorage.removeItem(STORAGE_KEY);
@@ -161,17 +234,38 @@ export const Avatar3DTab = () => {
       </p>
 
       <Dialog open={creatorOpen} onOpenChange={setCreatorOpen}>
-        <DialogContent className="max-w-3xl h-[85vh] p-0 overflow-hidden" dir="rtl">
-          <DialogHeader className="p-3 pb-0">
+        <DialogContent className="max-w-3xl h-[85vh] min-h-[500px] p-0 overflow-visible z-[60] flex flex-col" dir="rtl">
+          <DialogHeader className="p-3 pb-0 shrink-0">
             <DialogTitle>עיצוב הדמות</DialogTitle>
+            <DialogDescription className="sr-only">עורך אווטאר Ready Player Me</DialogDescription>
           </DialogHeader>
-          <iframe
-            ref={iframeRef}
-            src={`https://${RPM_SUBDOMAIN}.readyplayer.me/avatar?frameApi&clearCache`}
-            className="w-full h-full border-0"
-            allow="camera *; microphone *"
-            title="Ready Player Me Avatar Creator"
-          />
+          <div className="relative min-h-0 flex-1 overflow-visible bg-background">
+            {creatorStatus === "loading" && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
+                <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
+                  <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                  טוען...
+                </div>
+              </div>
+            )}
+            {creatorStatus === "error" && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background text-sm font-semibold text-destructive">
+                שגיאה בטעינת עורך הדמות
+              </div>
+            )}
+            {creatorOpen && (
+              <iframe
+                ref={iframeRef}
+                src={READY_PLAYER_ME_EMBED_URL}
+                style={{ width: "100%", height: "100%", border: "none", touchAction: "auto" }}
+                className="block min-h-[420px]"
+                allow="camera *; microphone *"
+                title="Ready Player Me Avatar Creator"
+                onLoad={() => setCreatorStatus("ready")}
+                onError={() => setCreatorStatus("error")}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
