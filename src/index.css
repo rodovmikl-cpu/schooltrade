@@ -247,6 +247,19 @@ All colors MUST be HSL.
     animation: fadeSlideIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
+  /* Active tab glow */
+  [role="tab"][data-state="active"],
+  [role="tab"][aria-selected="true"] {
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.35),
+                0 6px 18px -6px hsl(var(--primary) / 0.45);
+  }
+
+  /* Primary button soft text glow on hover */
+  button.bg-primary:hover,
+  .bg-primary > button:hover {
+    text-shadow: 0 0 10px hsl(var(--primary-foreground) / 0.45);
+  }
+
   /* Custom scrollbar — Discord-like */
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: hsl(var(--background)); }
@@ -281,6 +294,17 @@ All colors MUST be HSL.
 @keyframes softPulse {
   0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.0); }
   50%      { box-shadow: 0 0 18px 2px hsl(var(--primary) / 0.25); }
+}
+
+@keyframes successPop {
+  0%   { transform: scale(0.9); opacity: 0; }
+  50%  { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes buttonGlowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
+  50%      { box-shadow: 0 0 14px 1px hsl(var(--primary) / 0.35); }
 }
 
 
@@ -336,6 +360,18 @@ All colors MUST be HSL.
     background: linear-gradient(180deg, hsl(var(--card) / 0.85), hsl(var(--card) / 0.6));
     backdrop-filter: blur(8px);
     border: 1px solid hsl(var(--border));
+  }
+
+  .animate-success-pop {
+    animation: successPop 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .animate-btn-glow {
+    animation: buttonGlowPulse 2.4s ease-in-out infinite;
+  }
+
+  .animate-fade-slide-in {
+    animation: fadeSlideIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .animated-premium-username {
