@@ -1,4 +1,4 @@
-import { useState, useRef, Suspense, useEffect } from "react";
+import { useState, useRef, Suspense, useEffect, Component, ReactNode } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF } from "@react-three/drei";
 import { Button } from "@/components/ui/button";
@@ -6,11 +6,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import * as THREE from "three";
 
-// Ready Player Me — free, commercially licensed, rigged GLB avatars (mobile optimized)
-const RPM_SUBDOMAIN = "demo"; // public demo subdomain
-// Official RPM example avatar from their docs
+const RPM_SUBDOMAIN = "demo";
 const DEFAULT_AVATAR_URL =
   "https://models.readyplayer.me/6185a4acfb622cf1cdc49348.glb";
+
+class AvatarErrorBoundary extends Component<{ children: ReactNode; onError: () => void }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch() { this.props.onError(); }
+  render() { return this.state.hasError ? null : this.props.children; }
+}
 
 function AvatarMesh({ url }: { url: string }) {
   const { scene } = useGLTF(url);
@@ -18,7 +23,6 @@ function AvatarMesh({ url }: { url: string }) {
 
   useFrame((state) => {
     if (!ref.current) return;
-    // Idle breathing + subtle sway
     ref.current.position.y = -1.35 + Math.sin(state.clock.elapsedTime * 1.5) * 0.015;
     ref.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.4) * 0.08;
   });
