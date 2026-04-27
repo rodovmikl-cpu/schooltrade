@@ -1,13 +1,56 @@
-import { useState, useRef, Suspense, useEffect, Component, ReactNode } from "react";
+import { useState, useRef, Suspense, useEffect, Component, ReactNode, useCallback } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF } from "@react-three/drei";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
 import * as THREE from "three";
 
-const RPM_SUBDOMAIN = "demo";
+const READY_PLAYER_ME_EMBED_URL = "https://readyplayer.me/avatar?frameApi&clearCache";
 const STORAGE_KEY = "rpm_avatar_url";
+type CreatorStatus = "idle" | "loading" | "ready" | "error";
+
+interface Avatar3DTabProps {
+  userCode?: string;
+}
+
+const isValidAvatarUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      (url.hostname.endsWith("readyplayer.me") || value.includes(".glb") || value.includes(".png"))
+    );
+  } catch {
+    return false;
+  }
+};
+
+const parseFrameMessage = (raw: unknown): Record<string, any> | null => {
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return raw && typeof raw === "object" ? (raw as Record<string, any>) : null;
+};
+
+const extractAvatarUrl = (raw: unknown) => {
+  if (typeof raw === "string" && isValidAvatarUrl(raw)) return raw;
+  const data = parseFrameMessage(raw);
+  const candidates = [
+    data?.data?.url,
+    data?.data?.avatarUrl,
+    data?.url,
+    data?.avatarUrl,
+    data?.avatar?.url,
+  ];
+  return candidates.find((candidate): candidate is string => typeof candidate === "string" && isValidAvatarUrl(candidate)) || null;
+};
 
 class AvatarErrorBoundary extends Component<
   { children: ReactNode; onError: () => void },
