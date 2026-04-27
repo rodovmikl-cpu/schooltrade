@@ -263,6 +263,20 @@ All colors MUST be HSL.
     box-shadow: var(--shadow-glow);
   }
 
+  .hover-lift {
+    @apply transition-transform duration-200;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px hsl(235 86% 65% / 0.25);
+  }
+
+  .glass-panel {
+    background: linear-gradient(180deg, hsl(var(--card) / 0.85), hsl(var(--card) / 0.6));
+    backdrop-filter: blur(8px);
+    border: 1px solid hsl(var(--border));
+  }
+
   .animated-premium-username {
     @apply inline-block;
     animation: premiumGlow 3s ease-in-out infinite;
