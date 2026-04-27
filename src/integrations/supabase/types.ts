@@ -432,6 +432,30 @@ export type Database = {
           },
         ]
       }
+      user_avatars: {
+        Row: {
+          avatar_url: string
+          created_at: string
+          id: string
+          updated_at: string
+          user_code: string
+        }
+        Insert: {
+          avatar_url: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_code: string
+        }
+        Update: {
+          avatar_url?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_code?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           granted_at: string | null
