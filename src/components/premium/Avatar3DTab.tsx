@@ -9,7 +9,7 @@ import * as THREE from "three";
 // Ready Player Me — free, commercially licensed, rigged GLB avatars (mobile optimized)
 const RPM_SUBDOMAIN = "demo"; // public demo subdomain
 const DEFAULT_AVATAR_URL =
-  "https://models.readyplayer.me/64bfa15f0e72c63d7c3934a6.glb?morphTargets=ARKit&textureAtlas=1024&lod=1";
+  "https://models.readyplayer.me/6729887c8b3c2e9f3e8b4567.glb";
 
 function AvatarMesh({ url }: { url: string }) {
   const { scene } = useGLTF(url);
