@@ -7,14 +7,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import * as THREE from "three";
 
 const RPM_SUBDOMAIN = "demo";
-const DEFAULT_AVATAR_URL =
-  "https://models.readyplayer.me/6185a4acfb622cf1cdc49348.glb";
+const STORAGE_KEY = "rpm_avatar_url";
 
-class AvatarErrorBoundary extends Component<{ children: ReactNode; onError: () => void }, { hasError: boolean }> {
+class AvatarErrorBoundary extends Component<
+  { children: ReactNode; onError: () => void },
+  { hasError: boolean }
+> {
   state = { hasError: false };
-  static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch() { this.props.onError(); }
-  render() { return this.state.hasError ? null : this.props.children; }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch() {
+    this.props.onError();
+  }
+  render() {
+    return this.state.hasError ? null : this.props.children;
+  }
 }
 
 function AvatarMesh({ url }: { url: string }) {
@@ -35,38 +43,47 @@ function AvatarMesh({ url }: { url: string }) {
 }
 
 export const Avatar3DTab = () => {
-  const [avatarUrl, setAvatarUrl] = useState<string>(() => {
-    return localStorage.getItem("rpm_avatar_url") || DEFAULT_AVATAR_URL;
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() => {
+    return localStorage.getItem(STORAGE_KEY);
   });
   const [creatorOpen, setCreatorOpen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      const data = typeof event.data === "string" ? event.data : "";
-      // Ready Player Me posts the avatar GLB url as a string ending in .glb
-      if (data && typeof data === "string" && data.includes(".glb")) {
-        const optimized = data.includes("?")
-          ? data
-          : `${data}?morphTargets=ARKit&textureAtlas=1024&lod=1`;
-        setAvatarUrl(optimized);
-        localStorage.setItem("rpm_avatar_url", optimized);
-        setCreatorOpen(false);
-      }
-      // JSON event format
-      try {
-        const json = JSON.parse(data);
-        if (json?.eventName === "v1.avatar.exported" && json?.data?.url) {
-          const url = json.data.url;
-          const optimized = url.includes("?")
-            ? url
-            : `${url}?morphTargets=ARKit&textureAtlas=1024&lod=1`;
-          setAvatarUrl(optimized);
-          localStorage.setItem("rpm_avatar_url", optimized);
-          setCreatorOpen(false);
+      const raw = event.data;
+      let url: string | null = null;
+
+      if (typeof raw === "string") {
+        if (raw.includes(".glb")) {
+          url = raw;
+        } else {
+          try {
+            const json = JSON.parse(raw);
+            if (json?.eventName === "v1.avatar.exported" && json?.data?.url) {
+              url = json.data.url;
+            }
+            if (json?.source === "readyplayerme" && json?.eventName === "v1.frame.ready") {
+              // tell iframe to subscribe to events
+              iframeRef.current?.contentWindow?.postMessage(
+                JSON.stringify({
+                  target: "readyplayerme",
+                  type: "subscribe",
+                  eventName: "v1.**",
+                }),
+                "*"
+              );
+            }
+          } catch {
+            // ignore
+          }
         }
-      } catch {
-        // not JSON, ignore
+      }
+
+      if (url) {
+        setAvatarUrl(url);
+        localStorage.setItem(STORAGE_KEY, url);
+        setCreatorOpen(false);
       }
     };
     window.addEventListener("message", handleMessage);
@@ -74,8 +91,8 @@ export const Avatar3DTab = () => {
   }, []);
 
   const resetAvatar = () => {
-    localStorage.removeItem("rpm_avatar_url");
-    setAvatarUrl(DEFAULT_AVATAR_URL);
+    localStorage.removeItem(STORAGE_KEY);
+    setAvatarUrl(null);
   };
 
   return (
@@ -85,35 +102,43 @@ export const Avatar3DTab = () => {
         <p className="text-sm text-muted-foreground">דמות ריאליסטית באיכות משחק</p>
       </div>
 
-      {/* 3D Canvas with realistic RPM avatar */}
       <Card className="overflow-hidden">
-        <CardContent className="p-0 h-[380px] bg-gradient-to-b from-muted/40 to-muted/10">
-          <Canvas camera={{ position: [0, 0.2, 2.2], fov: 35 }} shadows>
-            <ambientLight intensity={0.7} />
-            <directionalLight position={[3, 5, 2]} intensity={1.2} castShadow />
-            <directionalLight position={[-3, 2, -2]} intensity={0.4} color="#a5b4fc" />
-            <pointLight position={[0, 2, 3]} intensity={0.6} color="#ffd9a8" />
-            <Suspense fallback={null}>
-              <AvatarErrorBoundary
-                key={avatarUrl}
-                onError={() => {
-                  if (avatarUrl !== DEFAULT_AVATAR_URL) {
-                    localStorage.removeItem("rpm_avatar_url");
-                    setAvatarUrl(DEFAULT_AVATAR_URL);
-                  }
-                }}
-              >
-                <AvatarMesh url={avatarUrl} />
-              </AvatarErrorBoundary>
-            </Suspense>
-            <OrbitControls
-              enableZoom={false}
-              enablePan={false}
-              target={[0, 0.1, 0]}
-              minPolarAngle={Math.PI / 2.6}
-              maxPolarAngle={Math.PI / 1.9}
-            />
-          </Canvas>
+        <CardContent className="p-0 h-[380px] bg-gradient-to-b from-muted/40 to-muted/10 relative">
+          {avatarUrl ? (
+            <Canvas camera={{ position: [0, 0.2, 2.2], fov: 35 }}>
+              <ambientLight intensity={0.7} />
+              <directionalLight position={[3, 5, 2]} intensity={1.2} />
+              <directionalLight position={[-3, 2, -2]} intensity={0.4} color="#a5b4fc" />
+              <pointLight position={[0, 2, 3]} intensity={0.6} color="#ffd9a8" />
+              <Suspense fallback={null}>
+                <AvatarErrorBoundary
+                  key={avatarUrl}
+                  onError={() => {
+                    localStorage.removeItem(STORAGE_KEY);
+                    setAvatarUrl(null);
+                  }}
+                >
+                  <AvatarMesh url={avatarUrl} />
+                </AvatarErrorBoundary>
+              </Suspense>
+              <OrbitControls
+                enableZoom={false}
+                enablePan={false}
+                target={[0, 0.1, 0]}
+                minPolarAngle={Math.PI / 2.6}
+                maxPolarAngle={Math.PI / 1.9}
+              />
+            </Canvas>
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 gap-3">
+              <div className="text-6xl">🧑‍🎨</div>
+              <p className="text-base font-semibold">צור את הדמות הריאליסטית שלך</p>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                לחץ על "עצב את הדמות שלך" כדי לפתוח את היוצר ולבנות אווטאר
+                ריאליסטי בסגנון משחק
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -121,7 +146,12 @@ export const Avatar3DTab = () => {
         <Button className="w-full" onClick={() => setCreatorOpen(true)}>
           🎨 עצב את הדמות שלך
         </Button>
-        <Button variant="outline" className="w-full" onClick={resetAvatar}>
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={resetAvatar}
+          disabled={!avatarUrl}
+        >
           🔄 איפוס דמות
         </Button>
       </div>
@@ -130,7 +160,6 @@ export const Avatar3DTab = () => {
         מופעל על ידי Ready Player Me — דמויות ריאליסטיות באיכות משחק
       </p>
 
-      {/* Ready Player Me creator iframe */}
       <Dialog open={creatorOpen} onOpenChange={setCreatorOpen}>
         <DialogContent className="max-w-3xl h-[85vh] p-0 overflow-hidden" dir="rtl">
           <DialogHeader className="p-3 pb-0">
@@ -148,6 +177,3 @@ export const Avatar3DTab = () => {
     </div>
   );
 };
-
-// Preload default avatar
-useGLTF.preload(DEFAULT_AVATAR_URL);
