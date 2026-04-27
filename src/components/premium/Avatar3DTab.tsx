@@ -98,9 +98,13 @@ export const Avatar3DTab = ({ userCode }: Avatar3DTabProps) => {
     localStorage.setItem(STORAGE_KEY, url);
 
     if (userCode) {
-      await (supabase as any)
-        .from("user_avatars")
-        .upsert({ user_code: userCode, avatar_url: url }, { onConflict: "user_code" });
+      try {
+        await (supabase as any)
+          .from("user_avatars")
+          .upsert({ user_code: userCode, avatar_url: url }, { onConflict: "user_code" });
+      } catch (error) {
+        console.error("Error saving avatar:", error);
+      }
     }
   }, [userCode]);
 
@@ -151,7 +155,7 @@ export const Avatar3DTab = ({ userCode }: Avatar3DTabProps) => {
 
       const url = extractAvatarUrl(event.data);
       if (url) {
-        persistAvatar(url);
+        void persistAvatar(url);
         setCreatorOpen(false);
       }
     };
