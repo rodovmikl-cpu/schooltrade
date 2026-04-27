@@ -94,7 +94,17 @@ export const Avatar3DTab = () => {
             <directionalLight position={[-3, 2, -2]} intensity={0.4} color="#a5b4fc" />
             <pointLight position={[0, 2, 3]} intensity={0.6} color="#ffd9a8" />
             <Suspense fallback={null}>
-              <AvatarMesh url={avatarUrl} />
+              <AvatarErrorBoundary
+                key={avatarUrl}
+                onError={() => {
+                  if (avatarUrl !== DEFAULT_AVATAR_URL) {
+                    localStorage.removeItem("rpm_avatar_url");
+                    setAvatarUrl(DEFAULT_AVATAR_URL);
+                  }
+                }}
+              >
+                <AvatarMesh url={avatarUrl} />
+              </AvatarErrorBoundary>
             </Suspense>
             <OrbitControls
               enableZoom={false}
