@@ -230,17 +230,38 @@ export const Avatar3DTab = ({ userCode }: Avatar3DTabProps) => {
       </p>
 
       <Dialog open={creatorOpen} onOpenChange={setCreatorOpen}>
-        <DialogContent className="max-w-3xl h-[85vh] p-0 overflow-hidden" dir="rtl">
-          <DialogHeader className="p-3 pb-0">
+        <DialogContent className="max-w-3xl h-[85vh] min-h-[500px] p-0 overflow-visible z-[60] flex flex-col" dir="rtl">
+          <DialogHeader className="p-3 pb-0 shrink-0">
             <DialogTitle>עיצוב הדמות</DialogTitle>
+            <DialogDescription className="sr-only">עורך אווטאר Ready Player Me</DialogDescription>
           </DialogHeader>
-          <iframe
-            ref={iframeRef}
-            src={`https://${RPM_SUBDOMAIN}.readyplayer.me/avatar?frameApi&clearCache`}
-            className="w-full h-full border-0"
-            allow="camera *; microphone *"
-            title="Ready Player Me Avatar Creator"
-          />
+          <div className="relative min-h-0 flex-1 overflow-visible bg-background">
+            {creatorStatus === "loading" && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
+                <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
+                  <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                  טוען...
+                </div>
+              </div>
+            )}
+            {creatorStatus === "error" && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background text-sm font-semibold text-destructive">
+                שגיאה בטעינת עורך הדמות
+              </div>
+            )}
+            {creatorOpen && (
+              <iframe
+                ref={iframeRef}
+                src={READY_PLAYER_ME_EMBED_URL}
+                style={{ width: "100%", height: "100%", border: "none", touchAction: "auto" }}
+                className="block min-h-[420px]"
+                allow="camera *; microphone *"
+                title="Ready Player Me Avatar Creator"
+                onLoad={() => setCreatorStatus("ready")}
+                onError={() => setCreatorStatus("error")}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
