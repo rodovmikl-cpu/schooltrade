@@ -109,76 +109,77 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 220 15% 15%;
+    /* Discord-inspired dark palette (applied as default) */
+    --background: 222 47% 6%;          /* #0b0f1a near-black */
+    --foreground: 210 40% 98%;         /* near-white */
 
-    --card: 0 0% 100%;
-    --card-foreground: 220 15% 15%;
+    --card: 222 39% 11%;               /* #111827 */
+    --card-foreground: 210 40% 98%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 15% 15%;
+    --popover: 222 39% 13%;
+    --popover-foreground: 210 40% 98%;
 
-    /* Schooltrade blue gradient: #3b8bff → #5cc1ff */
-    --primary: 210 100% 61%;
+    /* Discord blurple #5865F2 */
+    --primary: 235 86% 65%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 195 100% 62%;
+    --primary-glow: 245 80% 70%;
 
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 220 15% 15%;
+    --secondary: 220 26% 18%;          /* #1f2937 panels */
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 220 22% 16%;
+    --muted-foreground: 217 15% 70%;
 
-    --accent: 195 100% 62%;
+    --accent: 245 80% 70%;             /* soft purple glow */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 0 75% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 210 100% 61%;
+    --border: 220 18% 20%;
+    --input: 220 18% 18%;
+    --ring: 235 86% 65%;
 
-    --radius: 0.75rem;
+    --radius: 0.85rem;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(210 100% 61%), hsl(195 100% 62%));
-    --gradient-hero: linear-gradient(135deg, hsl(210 100% 61% / 0.1), hsl(195 100% 62% / 0.05));
-    
-    /* Shadows */
-    --shadow-soft: 0 2px 8px hsl(210 100% 61% / 0.1);
-    --shadow-glow: 0 0 20px hsl(195 100% 62% / 0.3);
+    --gradient-primary: linear-gradient(135deg, hsl(235 86% 65%), hsl(245 80% 70%));
+    --gradient-hero: linear-gradient(135deg, hsl(235 86% 65% / 0.18), hsl(245 80% 70% / 0.08));
+
+    /* Shadows (soft, layered) */
+    --shadow-soft: 0 4px 16px hsl(222 47% 3% / 0.4);
+    --shadow-glow: 0 0 24px hsl(235 86% 65% / 0.35);
   }
 
   .dark {
-    --background: 220 15% 10%;
-    --foreground: 0 0% 95%;
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
 
-    --card: 220 15% 12%;
-    --card-foreground: 0 0% 95%;
+    --card: 222 39% 11%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 220 15% 12%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 222 39% 13%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 210 100% 61%;
+    --primary: 235 86% 65%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 195 100% 62%;
+    --primary-glow: 245 80% 70%;
 
-    --secondary: 220 15% 18%;
-    --secondary-foreground: 0 0% 95%;
+    --secondary: 220 26% 18%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 220 15% 18%;
-    --muted-foreground: 220 9% 60%;
+    --muted: 220 22% 16%;
+    --muted-foreground: 217 15% 70%;
 
-    --accent: 195 100% 62%;
+    --accent: 245 80% 70%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 0 75% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 20%;
-    --input: 220 15% 20%;
-    --ring: 210 100% 61%;
+    --border: 220 18% 20%;
+    --input: 220 18% 18%;
+    --ring: 235 86% 65%;
   }
 }
 
@@ -187,9 +188,34 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
-  body {
+  html, body {
     @apply bg-background text-foreground antialiased;
   }
+
+  body {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, hsl(235 86% 65% / 0.10), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, hsl(245 80% 70% / 0.08), transparent 60%),
+      hsl(var(--background));
+    min-height: 100vh;
+  }
+
+  /* Smooth global transitions for the redesign */
+  button, a, [role="tab"], .card, [data-state] {
+    transition: background-color 200ms ease, color 200ms ease,
+                border-color 200ms ease, box-shadow 250ms ease,
+                transform 200ms ease, opacity 200ms ease;
+  }
+
+  /* Custom scrollbar — Discord-like */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: hsl(var(--background)); }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--secondary));
+    border-radius: 999px;
+    border: 2px solid hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.7); }
 
   /* RTL support for Hebrew */
   [dir="rtl"] {
