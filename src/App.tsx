@@ -13,14 +13,10 @@ import IntroSplash from "@/components/IntroSplash";
 const queryClient = new QueryClient();
 
 const App = () => {
-  const [introDone, setIntroDone] = useState(
-    () => sessionStorage.getItem("introPlayed") === "true"
-  );
-  const [introExiting, setIntroExiting] = useState(false);
+  const [hasIntroPlayed, setHasIntroPlayed] = useState(false);
 
   const handleIntroFinish = () => {
-    sessionStorage.setItem("introPlayed", "true");
-    setIntroDone(true);
+    setHasIntroPlayed(true);
   };
 
   return (
@@ -30,22 +26,19 @@ const App = () => {
           <TooltipProvider>
             <Toaster />
             <Sonner />
-            <BrowserRouter>
-              <div
-                style={{
-                  opacity: introDone ? 1 : 0,
-                  transition: "opacity 600ms cubic-bezier(0.22, 1, 0.36, 1)",
-                }}
-                className={introDone ? "app-enter-slide-up" : ""}
-              >
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </div>
-            </BrowserRouter>
-            {!introDone && <IntroSplash onFinish={handleIntroFinish} />}
+            {hasIntroPlayed ? (
+              <BrowserRouter>
+                <div className="app-enter-slide-up">
+                  <Routes>
+                    <Route path="/" element={<Index />} />
+                    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </div>
+              </BrowserRouter>
+            ) : (
+              <IntroSplash onFinish={handleIntroFinish} />
+            )}
           </TooltipProvider>
         </ChristmasProvider>
       </HalloweenProvider>
