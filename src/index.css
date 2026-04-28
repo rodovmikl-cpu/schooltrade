@@ -338,8 +338,12 @@ All colors MUST be HSL.
 @keyframes appSlideUpIn {
   from {
     opacity: 0;
-    transform: translateY(40px);
-    filter: blur(8px);
+    transform: translateY(100%);
+    filter: blur(10px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
   }
   to {
     opacity: 1;
@@ -349,7 +353,7 @@ All colors MUST be HSL.
 }
 
 .app-enter-slide-up {
-  animation: appSlideUpIn 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: appSlideUpIn 1100ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @layer utilities {
