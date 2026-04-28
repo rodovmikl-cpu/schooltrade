@@ -4,7 +4,9 @@ interface IntroSplashProps {
   onFinish: () => void;
 }
 
-const MAX_DURATION_MS = 6000;
+// Hard safety cap (well above real video length) — only used if `ended` never fires
+const SAFETY_CAP_MS = 20000;
+const FADE_OUT_MS = 1200;
 
 export const IntroSplash = ({ onFinish }: IntroSplashProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -16,14 +18,18 @@ export const IntroSplash = ({ onFinish }: IntroSplashProps) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
     setExiting(true);
-    setTimeout(() => onFinish(), 900);
+    setTimeout(() => onFinish(), FADE_OUT_MS);
   };
 
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
 
-    // Try to play with sound first; if blocked, mute and play, then unmute on tap
+    // Ensure no native controls / no user interruption
+    v.controls = false;
+    (v as any).disablePictureInPicture = true;
+    v.setAttribute("controlsList", "nodownload noplaybackrate nofullscreen noremoteplayback");
+
     const tryPlay = async () => {
       try {
         v.muted = false;
@@ -35,7 +41,6 @@ export const IntroSplash = ({ onFinish }: IntroSplashProps) => {
           await v.play();
           setNeedsTap(true);
         } catch {
-          // Give up and finish quickly
           finish();
         }
       }
@@ -45,10 +50,23 @@ export const IntroSplash = ({ onFinish }: IntroSplashProps) => {
     const onEnded = () => finish();
     v.addEventListener("ended", onEnded);
 
-    const t = setTimeout(finish, MAX_DURATION_MS);
+    // Block any attempt to pause the video (e.g. tab visibility, accidental taps)
+    const onPause = () => {
+      if (!finishedRef.current && !v.ended) {
+        v.play().catch(() => {});
+      }
+    };
+    v.addEventListener("pause", onPause);
+
+    const onContext = (e: Event) => e.preventDefault();
+    v.addEventListener("contextmenu", onContext);
+
+    const safety = setTimeout(finish, SAFETY_CAP_MS);
     return () => {
-      clearTimeout(t);
+      clearTimeout(safety);
       v.removeEventListener("ended", onEnded);
+      v.removeEventListener("pause", onPause);
+      v.removeEventListener("contextmenu", onContext);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -67,10 +85,11 @@ export const IntroSplash = ({ onFinish }: IntroSplashProps) => {
     <div
       dir="rtl"
       onClick={needsTap ? enableSound : undefined}
+      onTouchStart={needsTap ? enableSound : undefined}
       className="fixed inset-0 z-[9999] overflow-hidden bg-black"
       style={{
         opacity: exiting ? 0 : 1,
-        transition: "opacity 800ms cubic-bezier(0.22, 1, 0.36, 1)",
+        transition: `opacity ${FADE_OUT_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`,
       }}
     >
       <video
@@ -79,7 +98,9 @@ export const IntroSplash = ({ onFinish }: IntroSplashProps) => {
         playsInline
         autoPlay
         preload="auto"
-        className="absolute inset-0 w-full h-full"
+        disablePictureInPicture
+        controlsList="nodownload noplaybackrate nofullscreen noremoteplayback"
+        className="absolute inset-0 w-full h-full pointer-events-none select-none"
         style={{
           objectFit: "cover",
           objectPosition: "center",
@@ -103,13 +124,6 @@ export const IntroSplash = ({ onFinish }: IntroSplashProps) => {
           הקש להפעלת סאונד
         </button>
       )}
-
-      <button
-        onClick={finish}
-        className="absolute top-4 left-4 text-white/80 text-xs px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 hover:bg-white/20"
-      >
-        דלג
-      </button>
     </div>
   );
 };
