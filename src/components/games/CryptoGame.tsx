@@ -88,6 +88,46 @@ interface EventData {
 
 const STORAGE_KEY = "crypto-game-state";
 
+// ===== Numeric safety constants & helpers =====
+const MAX_CAP = 1e12; // hard cap for any monetary value (price/balance/value)
+const MIN_PRICE = 0.0001;
+const MAX_SPIKE_MULT = 1000; // clamp any single spike multiplier
+const MAX_PERCENT = 1e6; // clamp percentage display
+
+const safeNumber = (value: any, fallback = 0): number => {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value === "string") value = value.replace(/,/g, ".").trim();
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    console.warn("[CryptoGame] invalid numeric input, using fallback:", value);
+    return fallback;
+  }
+  return n;
+};
+
+const cap = (n: number, max = MAX_CAP, min = -MAX_CAP): number => {
+  if (!Number.isFinite(n)) return 0;
+  if (n > max) {
+    console.warn("[CryptoGame] value capped at MAX:", n);
+    return max;
+  }
+  if (n < min) return min;
+  return n;
+};
+
+const safePrice = (n: number, prev: number = MIN_PRICE): number => {
+  if (!Number.isFinite(n)) {
+    console.warn("[CryptoGame] non-finite price, reverting to prev:", n);
+    return prev;
+  }
+  return Math.min(MAX_CAP, Math.max(MIN_PRICE, n));
+};
+
+const safePercent = (n: number): number => {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(-MAX_PERCENT, Math.min(MAX_PERCENT, n));
+};
+
 // Sound effects using Web Audio API
 const playEventSound = (type: 'start' | 'surge' | 'massive') => {
   if (!globalSoundEnabled) return; // Check if sound is enabled
