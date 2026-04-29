@@ -774,10 +774,16 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
     setSelectedCrypto(null);
   };
 
-  const sellCrypto = (crypto: Crypto, amount: number) => {
+  const sellCrypto = (crypto: Crypto, amountRaw: number) => {
     if (!gameState) return;
 
-    const owned = gameState.portfolio[crypto.id] || 0;
+    const amount = safeNumber(amountRaw, 0);
+    if (amount <= 0 || !Number.isFinite(amount)) {
+      toast({ title: "כמות לא תקינה!", variant: "destructive" });
+      return;
+    }
+
+    const owned = safeNumber(gameState.portfolio[crypto.id], 0);
     if (amount > owned) {
       toast({ title: "אין לך מספיק מטבעות!", variant: "destructive" });
       return;
