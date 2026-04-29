@@ -330,6 +330,8 @@ const sanitizeGameState = (raw: any): GameState | null => {
 
   return { balance, cryptos, portfolio, holdings, totalInvested, history };
 };
+
+export const CryptoGame = ({ userCode }: CryptoGameProps) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selectedCrypto, setSelectedCrypto] = useState<Crypto | null>(null);
   const [buyAmount, setBuyAmount] = useState("");
