@@ -282,7 +282,54 @@ const initializeCryptos = (): Crypto[] => {
   return all.sort((a, b) => a.price - b.price);
 };
 
-export const CryptoGame = ({ userCode }: CryptoGameProps) => {
+// Validate & repair a loaded GameState. Returns null if it's irrecoverably broken.
+const sanitizeGameState = (raw: any): GameState | null => {
+  if (!raw || typeof raw !== "object") return null;
+  if (!Array.isArray(raw.cryptos)) return null;
+
+  const cryptos: Crypto[] = raw.cryptos
+    .filter((c: any) => c && typeof c.id === "string")
+    .map((c: any) => ({
+      id: c.id,
+      name: String(c.name ?? ""),
+      symbol: String(c.symbol ?? ""),
+      price: safePrice(safeNumber(c.price, MIN_PRICE), MIN_PRICE),
+      change24h: safePercent(safeNumber(c.change24h, 0)),
+      isReal: !!c.isReal,
+      owned: Math.max(0, Math.min(MAX_CAP, safeNumber(c.owned, 0))),
+      isCustom: !!c.isCustom,
+      preEventPrice: c.preEventPrice !== undefined ? safePrice(safeNumber(c.preEventPrice, MIN_PRICE), MIN_PRICE) : undefined,
+    }));
+
+  const portfolio: { [id: string]: number } = {};
+  if (raw.portfolio && typeof raw.portfolio === "object") {
+    Object.entries(raw.portfolio).forEach(([k, v]) => {
+      const n = safeNumber(v, 0);
+      if (n > 0) portfolio[k] = Math.min(MAX_CAP, n);
+    });
+  }
+
+  const holdings: { [id: string]: Holding[] } = {};
+  if (raw.holdings && typeof raw.holdings === "object") {
+    Object.entries(raw.holdings).forEach(([k, arr]) => {
+      if (!Array.isArray(arr)) return;
+      const cleaned = (arr as any[])
+        .map((h) => ({
+          amount: Math.max(0, Math.min(MAX_CAP, safeNumber(h?.amount, 0))),
+          buyPercentage: safePercent(safeNumber(h?.buyPercentage, 0)),
+          investedAmount: Math.max(0, Math.min(MAX_CAP, safeNumber(h?.investedAmount, 0))),
+        }))
+        .filter((h) => h.amount > 0);
+      if (cleaned.length > 0) holdings[k] = cleaned;
+    });
+  }
+
+  const balance = Math.max(0, Math.min(MAX_CAP, safeNumber(raw.balance, 20)));
+  const totalInvested = Math.max(0, Math.min(MAX_CAP, safeNumber(raw.totalInvested, 0)));
+  const history = Array.isArray(raw.history) ? raw.history.slice(0, 50) : [];
+
+  return { balance, cryptos, portfolio, holdings, totalInvested, history };
+};
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selectedCrypto, setSelectedCrypto] = useState<Crypto | null>(null);
   const [buyAmount, setBuyAmount] = useState("");
