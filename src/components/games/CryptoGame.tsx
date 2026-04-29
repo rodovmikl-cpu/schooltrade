@@ -88,6 +88,46 @@ interface EventData {
 
 const STORAGE_KEY = "crypto-game-state";
 
+// ===== Numeric safety constants & helpers =====
+const MAX_CAP = 1e12; // hard cap for any monetary value (price/balance/value)
+const MIN_PRICE = 0.0001;
+const MAX_SPIKE_MULT = 1000; // clamp any single spike multiplier
+const MAX_PERCENT = 1e6; // clamp percentage display
+
+const safeNumber = (value: any, fallback = 0): number => {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value === "string") value = value.replace(/,/g, ".").trim();
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    console.warn("[CryptoGame] invalid numeric input, using fallback:", value);
+    return fallback;
+  }
+  return n;
+};
+
+const cap = (n: number, max = MAX_CAP, min = -MAX_CAP): number => {
+  if (!Number.isFinite(n)) return 0;
+  if (n > max) {
+    console.warn("[CryptoGame] value capped at MAX:", n);
+    return max;
+  }
+  if (n < min) return min;
+  return n;
+};
+
+const safePrice = (n: number, prev: number = MIN_PRICE): number => {
+  if (!Number.isFinite(n)) {
+    console.warn("[CryptoGame] non-finite price, reverting to prev:", n);
+    return prev;
+  }
+  return Math.min(MAX_CAP, Math.max(MIN_PRICE, n));
+};
+
+const safePercent = (n: number): number => {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(-MAX_PERCENT, Math.min(MAX_PERCENT, n));
+};
+
 // Sound effects using Web Audio API
 const playEventSound = (type: 'start' | 'surge' | 'massive') => {
   if (!globalSoundEnabled) return; // Check if sound is enabled
@@ -242,6 +282,55 @@ const initializeCryptos = (): Crypto[] => {
   return all.sort((a, b) => a.price - b.price);
 };
 
+// Validate & repair a loaded GameState. Returns null if it's irrecoverably broken.
+const sanitizeGameState = (raw: any): GameState | null => {
+  if (!raw || typeof raw !== "object") return null;
+  if (!Array.isArray(raw.cryptos)) return null;
+
+  const cryptos: Crypto[] = raw.cryptos
+    .filter((c: any) => c && typeof c.id === "string")
+    .map((c: any) => ({
+      id: c.id,
+      name: String(c.name ?? ""),
+      symbol: String(c.symbol ?? ""),
+      price: safePrice(safeNumber(c.price, MIN_PRICE), MIN_PRICE),
+      change24h: safePercent(safeNumber(c.change24h, 0)),
+      isReal: !!c.isReal,
+      owned: Math.max(0, Math.min(MAX_CAP, safeNumber(c.owned, 0))),
+      isCustom: !!c.isCustom,
+      preEventPrice: c.preEventPrice !== undefined ? safePrice(safeNumber(c.preEventPrice, MIN_PRICE), MIN_PRICE) : undefined,
+    }));
+
+  const portfolio: { [id: string]: number } = {};
+  if (raw.portfolio && typeof raw.portfolio === "object") {
+    Object.entries(raw.portfolio).forEach(([k, v]) => {
+      const n = safeNumber(v, 0);
+      if (n > 0) portfolio[k] = Math.min(MAX_CAP, n);
+    });
+  }
+
+  const holdings: { [id: string]: Holding[] } = {};
+  if (raw.holdings && typeof raw.holdings === "object") {
+    Object.entries(raw.holdings).forEach(([k, arr]) => {
+      if (!Array.isArray(arr)) return;
+      const cleaned = (arr as any[])
+        .map((h) => ({
+          amount: Math.max(0, Math.min(MAX_CAP, safeNumber(h?.amount, 0))),
+          buyPercentage: safePercent(safeNumber(h?.buyPercentage, 0)),
+          investedAmount: Math.max(0, Math.min(MAX_CAP, safeNumber(h?.investedAmount, 0))),
+        }))
+        .filter((h) => h.amount > 0);
+      if (cleaned.length > 0) holdings[k] = cleaned;
+    });
+  }
+
+  const balance = Math.max(0, Math.min(MAX_CAP, safeNumber(raw.balance, 20)));
+  const totalInvested = Math.max(0, Math.min(MAX_CAP, safeNumber(raw.totalInvested, 0)));
+  const history = Array.isArray(raw.history) ? raw.history.slice(0, 50) : [];
+
+  return { balance, cryptos, portfolio, holdings, totalInvested, history };
+};
+
 export const CryptoGame = ({ userCode }: CryptoGameProps) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selectedCrypto, setSelectedCrypto] = useState<Crypto | null>(null);
@@ -338,15 +427,23 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
     }
   }, [isEventActive, toast]);
 
-  // Load game state from localStorage
+  // Load game state from localStorage (with sanitization)
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setGameState(parsed);
+        const sanitized = sanitizeGameState(parsed);
+        if (!sanitized) {
+          console.warn("[CryptoGame] corrupted state, resetting crypto game only");
+          localStorage.removeItem(STORAGE_KEY);
+          initializeNewGame();
+        } else {
+          setGameState(sanitized);
+        }
       } catch (e) {
         console.error("Error loading game state:", e);
+        localStorage.removeItem(STORAGE_KEY);
         initializeNewGame();
       }
     } else {
@@ -457,88 +554,90 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
       let triggeredSurge: { name: string; change: number } | null = null;
 
       const updatedCryptos = prev.cryptos.map(crypto => {
+        const prevPrice = safePrice(crypto.price, MIN_PRICE);
+
         // If event just ended, guarantee +1% above pre-event price
         if (eventJustEnded && eventData?.preEventPrices[crypto.id]) {
-          const preEventPrice = eventData.preEventPrices[crypto.id];
-          const minEndPrice = preEventPrice * 1.01; // At least +1%
-          const finalPrice = Math.max(crypto.price, minEndPrice);
+          const preEventPrice = safePrice(eventData.preEventPrices[crypto.id], MIN_PRICE);
+          const minEndPrice = preEventPrice * 1.01;
+          const finalPrice = safePrice(Math.max(prevPrice, minEndPrice), prevPrice);
           return {
             ...crypto,
             price: finalPrice,
-            change24h: ((finalPrice - crypto.price) / crypto.price) * 100,
+            change24h: safePercent(((finalPrice - prevPrice) / prevPrice) * 100),
           };
         }
 
-        // Check for extreme spike on owned cryptos
+        // Check for extreme spike on owned cryptos (clamped to MAX_SPIKE_MULT)
         if ((crypto.owned || 0) > 0 && Math.random() < spikeChance) {
-          const spikeMultiplier = 20000; // +2,000,000% = price * 20000
+          // Clamp spike so prices cannot blow past MAX_CAP
+          const desired = 20000;
+          const headroom = prevPrice > 0 ? MAX_CAP / prevPrice : MAX_SPIKE_MULT;
+          const spikeMultiplier = Math.max(2, Math.min(MAX_SPIKE_MULT, desired, headroom));
           triggeredSpike = { id: crypto.id, name: crypto.name, multiplier: spikeMultiplier };
           playEventSound('massive');
+          const spikedPrice = safePrice(prevPrice * spikeMultiplier, prevPrice);
           return {
             ...crypto,
-            price: crypto.price * spikeMultiplier,
-            change24h: 2000000,
+            price: spikedPrice,
+            change24h: safePercent((spikeMultiplier - 1) * 100),
           };
         }
 
         // MAJOR EVENT BEHAVIOR - significantly boosted gains
         if (isEventActive) {
-          // During event: much higher volatility and positive bias
-          const eventVolatility = crypto.price > 10000 ? 0.6 : crypto.price > 100 ? 0.45 : 0.35;
-          const eventBias = 0.15; // Strong positive bias for event
+          const eventVolatility = prevPrice > 10000 ? 0.6 : prevPrice > 100 ? 0.45 : 0.35;
+          const eventBias = 0.15;
           const change = (Math.random() - 0.5 + eventBias) * eventVolatility * 2;
-          
-          // Higher chance of major surge during event
-          const surgeChance = 0.08; // 8% chance of surge each update
+
+          const surgeChance = 0.08;
           const isSurge = Math.random() < surgeChance;
-          
+
           if (isSurge) {
             const surgeMultiplier = 1 + (Math.random() * 2 + 0.5); // +50% to +250%
-            const surgedPrice = crypto.price * surgeMultiplier;
-            const surgeChange = (surgeMultiplier - 1) * 100;
-            
+            const surgedPrice = safePrice(prevPrice * surgeMultiplier, prevPrice);
+            const surgeChange = safePercent(((surgedPrice - prevPrice) / prevPrice) * 100);
+
             if (surgeChange > 100 && !triggeredSurge) {
               triggeredSurge = { name: crypto.name, change: surgeChange };
               playEventSound('surge');
             }
-            
-            return {
-              ...crypto,
-              price: surgedPrice,
-              change24h: surgeChange,
-            };
+
+            return { ...crypto, price: surgedPrice, change24h: surgeChange };
           }
-          
-          // Reduced crash chance during event
-          const crashChance = crypto.price > 50000 ? 0.005 : 0.002;
+
+          const crashChance = prevPrice > 50000 ? 0.005 : 0.002;
           const isCrash = Math.random() < crashChance;
-          
-          const newPrice = Math.max(0.0001, crypto.price * (1 + change));
-          const finalPrice = isCrash ? crypto.price * (0.7 + Math.random() * 0.2) : newPrice;
-          
+
+          const newPrice = safePrice(prevPrice * (1 + change), prevPrice);
+          const finalPrice = isCrash
+            ? safePrice(prevPrice * (0.7 + Math.random() * 0.2), prevPrice)
+            : newPrice;
+
           return {
             ...crypto,
             price: finalPrice,
-            change24h: ((finalPrice - crypto.price) / crypto.price) * 100,
+            change24h: safePercent(((finalPrice - prevPrice) / prevPrice) * 100),
           };
         }
 
         // Normal behavior (outside event)
-        const volatility = crypto.price > 10000 ? 0.35 : crypto.price > 100 ? 0.25 : 0.18;
-        const bias = 0.02; // Slight positive bias for profit
+        const volatility = prevPrice > 10000 ? 0.35 : prevPrice > 100 ? 0.25 : 0.18;
+        const bias = 0.02;
         const change = (Math.random() - 0.5 + bias) * volatility * 2;
-        const newPrice = Math.max(0.0001, crypto.price * (1 + change));
-        
-        // Small chance of crash for expensive coins
-        const crashChance = crypto.price > 50000 ? 0.02 : crypto.price > 1000 ? 0.01 : 0.005;
+        const newPrice = safePrice(prevPrice * (1 + change), prevPrice);
+
+        const crashChance = prevPrice > 50000 ? 0.02 : prevPrice > 1000 ? 0.01 : 0.005;
         const isCrash = Math.random() < crashChance;
-        
-        const finalPrice = isCrash ? crypto.price * (0.3 + Math.random() * 0.4) : newPrice;
-        
+
+        const finalPrice = isCrash
+          ? safePrice(prevPrice * (0.3 + Math.random() * 0.4), prevPrice)
+          : newPrice;
+
         return {
           ...crypto,
           price: finalPrice,
-          change24h: ((finalPrice - crypto.price) / crypto.price) * 100,
+          change24h: safePercent(((finalPrice - prevPrice) / prevPrice) * 100),
         };
       });
 
@@ -611,11 +710,17 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
     return () => clearInterval(interval);
   }, [updatePrices]);
 
-  const buyCrypto = (crypto: Crypto, amount: number) => {
+  const buyCrypto = (crypto: Crypto, amountRaw: number) => {
     if (!gameState) return;
 
-    const totalCost = crypto.price * amount;
-    if (totalCost > gameState.balance) {
+    const amount = safeNumber(amountRaw, 0);
+    if (amount <= 0 || !Number.isFinite(amount)) {
+      toast({ title: "כמות לא תקינה!", variant: "destructive" });
+      return;
+    }
+
+    const totalCost = safeNumber(crypto.price * amount, 0);
+    if (!Number.isFinite(totalCost) || totalCost <= 0 || totalCost > gameState.balance) {
       toast({ title: "אין מספיק כסף!", variant: "destructive" });
       return;
     }
@@ -651,11 +756,11 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
 
       return {
         ...prev,
-        balance: prev.balance - totalCost,
+        balance: cap(safeNumber(prev.balance - totalCost, 0), MAX_CAP, 0),
         portfolio: newPortfolio,
         holdings: newHoldings,
         cryptos: updatedCryptos,
-        totalInvested: prev.totalInvested + totalCost,
+        totalInvested: cap(safeNumber(prev.totalInvested + totalCost, 0), MAX_CAP, 0),
         history: [
           { action: `קנית ${amount} ${crypto.name} ב-$${totalCost.toFixed(2)} (${buyPercentageDisplay})`, timestamp: Date.now() },
           ...prev.history.slice(0, 49),
@@ -669,10 +774,16 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
     setSelectedCrypto(null);
   };
 
-  const sellCrypto = (crypto: Crypto, amount: number) => {
+  const sellCrypto = (crypto: Crypto, amountRaw: number) => {
     if (!gameState) return;
 
-    const owned = gameState.portfolio[crypto.id] || 0;
+    const amount = safeNumber(amountRaw, 0);
+    if (amount <= 0 || !Number.isFinite(amount)) {
+      toast({ title: "כמות לא תקינה!", variant: "destructive" });
+      return;
+    }
+
+    const owned = safeNumber(gameState.portfolio[crypto.id], 0);
     if (amount > owned) {
       toast({ title: "אין לך מספיק מטבעות!", variant: "destructive" });
       return;
@@ -718,8 +829,8 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
     }
 
     weightedBuyPercentage = amount > 0 ? weightedBuyPercentage / amount : 0;
-    const percentageDiff = sellPercentage - weightedBuyPercentage;
-    const finalValue = totalInvested + totalProfit;
+    const percentageDiff = safePercent(sellPercentage - weightedBuyPercentage);
+    const finalValue = Math.max(0, cap(safeNumber(totalInvested + totalProfit, 0), MAX_CAP, 0));
 
     setGameState(prev => {
       if (!prev) return prev;
@@ -751,7 +862,7 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
 
       return {
         ...prev,
-        balance: prev.balance + finalValue,
+        balance: cap(safeNumber(prev.balance + finalValue, prev.balance), MAX_CAP, 0),
         portfolio: newPortfolio,
         holdings: newHoldings,
         cryptos: updatedCryptos,
@@ -779,10 +890,14 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
       return;
     }
 
-    const amount = parseFloat(newCryptoAmount);
-    const pricePerCoin = parseFloat(newCryptoPrice);
-    const totalCost = amount * pricePerCoin;
+    const amount = safeNumber(newCryptoAmount, 0);
+    const pricePerCoin = safeNumber(newCryptoPrice, 0);
+    const totalCost = safeNumber(amount * pricePerCoin, 0);
 
+    if (amount <= 0 || pricePerCoin <= 0 || !Number.isFinite(totalCost) || totalCost <= 0) {
+      toast({ title: "ערכים לא תקינים!", variant: "destructive" });
+      return;
+    }
     if (totalCost > gameState.balance) {
       toast({ title: "אין מספיק כסף ליצירת המטבע!", variant: "destructive" });
       return;
