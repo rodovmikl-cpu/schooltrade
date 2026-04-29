@@ -130,31 +130,33 @@ export const KeifConverter = ({ userCode, userName }: KeifConverterProps) => {
     const newTotal = (keifBalance?.total_keif || 0) + totalConvertible;
 
     try {
-      if (keifBalance) {
-        const { error } = await supabase
-          .from("keif_balances")
-          .update({
-            total_keif: newTotal,
-            user_name: userName,
-            updated_at: new Date().toISOString(),
-            ...newConverted,
-          })
-          .eq("user_code", userCode);
-        if (error) throw error;
-      } else {
-        const insertData: any = {
-          user_code: userCode,
-          user_name: userName,
-          total_keif: newTotal,
-          converted_math: 0,
-          converted_hebrew: 0,
-          converted_english: 0,
-          converted_crypto: 0,
-          ...newConverted,
-        };
-        const { error } = await supabase.from("keif_balances").insert(insertData);
-        if (error) throw error;
-      }
+      // Re-fetch latest balance to avoid stale duplicates and ensure single record per user
+      const { data: latest } = await supabase
+        .from("keif_balances")
+        .select("*")
+        .eq("user_code", userCode)
+        .maybeSingle();
+
+      const baseConverted = {
+        converted_math: latest?.converted_math ?? 0,
+        converted_hebrew: latest?.converted_hebrew ?? 0,
+        converted_english: latest?.converted_english ?? 0,
+        converted_crypto: latest?.converted_crypto ?? 0,
+      };
+
+      const upsertData: any = {
+        user_code: userCode,
+        user_name: userName,
+        total_keif: newTotal,
+        ...baseConverted,
+        ...newConverted,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from("keif_balances")
+        .upsert(upsertData, { onConflict: "user_code" });
+      if (error) throw error;
 
       // Animate counter
       setAnimating(true);
