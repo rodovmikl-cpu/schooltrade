@@ -521,8 +521,16 @@ export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
 
   if (!isPremiumUser) {
+    if (premiumLoading) {
+      return (
+        <Card className="p-8 text-center animate-fade-slide-in">
+          <MessageCircle className="w-16 h-16 mx-auto mb-4 text-muted-foreground animate-pulse" />
+          <h3 className="text-xl font-bold mb-2">טוען…</h3>
+        </Card>
+      );
+    }
     return (
-      <Card className="p-8 text-center">
+      <Card className="p-8 text-center animate-fade-slide-in">
         <MessageCircle className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
         <h3 className="text-xl font-bold mb-2">צ'אטים פרטיים</h3>
         <p className="text-muted-foreground">
