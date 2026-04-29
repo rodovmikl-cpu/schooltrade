@@ -756,11 +756,11 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
 
       return {
         ...prev,
-        balance: prev.balance - totalCost,
+        balance: cap(safeNumber(prev.balance - totalCost, 0), MAX_CAP, 0),
         portfolio: newPortfolio,
         holdings: newHoldings,
         cryptos: updatedCryptos,
-        totalInvested: prev.totalInvested + totalCost,
+        totalInvested: cap(safeNumber(prev.totalInvested + totalCost, 0), MAX_CAP, 0),
         history: [
           { action: `קנית ${amount} ${crypto.name} ב-$${totalCost.toFixed(2)} (${buyPercentageDisplay})`, timestamp: Date.now() },
           ...prev.history.slice(0, 49),
