@@ -113,8 +113,29 @@ export const PrivateChats = ({ userCode, userName }: PrivateChatsProps) => {
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const isPremiumUser = PREMIUM_USERS.includes(userCode);
+  const [dbPremium, setDbPremium] = useState<boolean | null>(null);
+  const isPremiumUser = PREMIUM_USERS.includes(userCode) || dbPremium === true;
+  const premiumLoading = dbPremium === null && !PREMIUM_USERS.includes(userCode);
   const currentMonth = new Date().toISOString().slice(0, 7);
+
+  // Sync premium status from DB so that users granted premium via subscription
+  // (e.g. code redemption) also get full access — not only the hardcoded list.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("users")
+          .select("is_premium")
+          .eq("code", userCode)
+          .maybeSingle();
+        if (!cancelled) setDbPremium(!!data?.is_premium);
+      } catch {
+        if (!cancelled) setDbPremium(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userCode]);
 
   // Request notification permission on mount
   useEffect(() => {
