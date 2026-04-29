@@ -710,11 +710,17 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
     return () => clearInterval(interval);
   }, [updatePrices]);
 
-  const buyCrypto = (crypto: Crypto, amount: number) => {
+  const buyCrypto = (crypto: Crypto, amountRaw: number) => {
     if (!gameState) return;
 
-    const totalCost = crypto.price * amount;
-    if (totalCost > gameState.balance) {
+    const amount = safeNumber(amountRaw, 0);
+    if (amount <= 0 || !Number.isFinite(amount)) {
+      toast({ title: "כמות לא תקינה!", variant: "destructive" });
+      return;
+    }
+
+    const totalCost = safeNumber(crypto.price * amount, 0);
+    if (!Number.isFinite(totalCost) || totalCost <= 0 || totalCost > gameState.balance) {
       toast({ title: "אין מספיק כסף!", variant: "destructive" });
       return;
     }
