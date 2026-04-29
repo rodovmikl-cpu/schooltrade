@@ -862,7 +862,7 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
 
       return {
         ...prev,
-        balance: prev.balance + finalValue,
+        balance: cap(safeNumber(prev.balance + finalValue, prev.balance), MAX_CAP, 0),
         portfolio: newPortfolio,
         holdings: newHoldings,
         cryptos: updatedCryptos,
