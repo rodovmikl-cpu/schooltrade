@@ -890,10 +890,14 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
       return;
     }
 
-    const amount = parseFloat(newCryptoAmount);
-    const pricePerCoin = parseFloat(newCryptoPrice);
-    const totalCost = amount * pricePerCoin;
+    const amount = safeNumber(newCryptoAmount, 0);
+    const pricePerCoin = safeNumber(newCryptoPrice, 0);
+    const totalCost = safeNumber(amount * pricePerCoin, 0);
 
+    if (amount <= 0 || pricePerCoin <= 0 || !Number.isFinite(totalCost) || totalCost <= 0) {
+      toast({ title: "ערכים לא תקינים!", variant: "destructive" });
+      return;
+    }
     if (totalCost > gameState.balance) {
       toast({ title: "אין מספיק כסף ליצירת המטבע!", variant: "destructive" });
       return;
