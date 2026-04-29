@@ -554,88 +554,90 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
       let triggeredSurge: { name: string; change: number } | null = null;
 
       const updatedCryptos = prev.cryptos.map(crypto => {
+        const prevPrice = safePrice(crypto.price, MIN_PRICE);
+
         // If event just ended, guarantee +1% above pre-event price
         if (eventJustEnded && eventData?.preEventPrices[crypto.id]) {
-          const preEventPrice = eventData.preEventPrices[crypto.id];
-          const minEndPrice = preEventPrice * 1.01; // At least +1%
-          const finalPrice = Math.max(crypto.price, minEndPrice);
+          const preEventPrice = safePrice(eventData.preEventPrices[crypto.id], MIN_PRICE);
+          const minEndPrice = preEventPrice * 1.01;
+          const finalPrice = safePrice(Math.max(prevPrice, minEndPrice), prevPrice);
           return {
             ...crypto,
             price: finalPrice,
-            change24h: ((finalPrice - crypto.price) / crypto.price) * 100,
+            change24h: safePercent(((finalPrice - prevPrice) / prevPrice) * 100),
           };
         }
 
-        // Check for extreme spike on owned cryptos
+        // Check for extreme spike on owned cryptos (clamped to MAX_SPIKE_MULT)
         if ((crypto.owned || 0) > 0 && Math.random() < spikeChance) {
-          const spikeMultiplier = 20000; // +2,000,000% = price * 20000
+          // Clamp spike so prices cannot blow past MAX_CAP
+          const desired = 20000;
+          const headroom = prevPrice > 0 ? MAX_CAP / prevPrice : MAX_SPIKE_MULT;
+          const spikeMultiplier = Math.max(2, Math.min(MAX_SPIKE_MULT, desired, headroom));
           triggeredSpike = { id: crypto.id, name: crypto.name, multiplier: spikeMultiplier };
           playEventSound('massive');
+          const spikedPrice = safePrice(prevPrice * spikeMultiplier, prevPrice);
           return {
             ...crypto,
-            price: crypto.price * spikeMultiplier,
-            change24h: 2000000,
+            price: spikedPrice,
+            change24h: safePercent((spikeMultiplier - 1) * 100),
           };
         }
 
         // MAJOR EVENT BEHAVIOR - significantly boosted gains
         if (isEventActive) {
-          // During event: much higher volatility and positive bias
-          const eventVolatility = crypto.price > 10000 ? 0.6 : crypto.price > 100 ? 0.45 : 0.35;
-          const eventBias = 0.15; // Strong positive bias for event
+          const eventVolatility = prevPrice > 10000 ? 0.6 : prevPrice > 100 ? 0.45 : 0.35;
+          const eventBias = 0.15;
           const change = (Math.random() - 0.5 + eventBias) * eventVolatility * 2;
-          
-          // Higher chance of major surge during event
-          const surgeChance = 0.08; // 8% chance of surge each update
+
+          const surgeChance = 0.08;
           const isSurge = Math.random() < surgeChance;
-          
+
           if (isSurge) {
             const surgeMultiplier = 1 + (Math.random() * 2 + 0.5); // +50% to +250%
-            const surgedPrice = crypto.price * surgeMultiplier;
-            const surgeChange = (surgeMultiplier - 1) * 100;
-            
+            const surgedPrice = safePrice(prevPrice * surgeMultiplier, prevPrice);
+            const surgeChange = safePercent(((surgedPrice - prevPrice) / prevPrice) * 100);
+
             if (surgeChange > 100 && !triggeredSurge) {
               triggeredSurge = { name: crypto.name, change: surgeChange };
               playEventSound('surge');
             }
-            
-            return {
-              ...crypto,
-              price: surgedPrice,
-              change24h: surgeChange,
-            };
+
+            return { ...crypto, price: surgedPrice, change24h: surgeChange };
           }
-          
-          // Reduced crash chance during event
-          const crashChance = crypto.price > 50000 ? 0.005 : 0.002;
+
+          const crashChance = prevPrice > 50000 ? 0.005 : 0.002;
           const isCrash = Math.random() < crashChance;
-          
-          const newPrice = Math.max(0.0001, crypto.price * (1 + change));
-          const finalPrice = isCrash ? crypto.price * (0.7 + Math.random() * 0.2) : newPrice;
-          
+
+          const newPrice = safePrice(prevPrice * (1 + change), prevPrice);
+          const finalPrice = isCrash
+            ? safePrice(prevPrice * (0.7 + Math.random() * 0.2), prevPrice)
+            : newPrice;
+
           return {
             ...crypto,
             price: finalPrice,
-            change24h: ((finalPrice - crypto.price) / crypto.price) * 100,
+            change24h: safePercent(((finalPrice - prevPrice) / prevPrice) * 100),
           };
         }
 
         // Normal behavior (outside event)
-        const volatility = crypto.price > 10000 ? 0.35 : crypto.price > 100 ? 0.25 : 0.18;
-        const bias = 0.02; // Slight positive bias for profit
+        const volatility = prevPrice > 10000 ? 0.35 : prevPrice > 100 ? 0.25 : 0.18;
+        const bias = 0.02;
         const change = (Math.random() - 0.5 + bias) * volatility * 2;
-        const newPrice = Math.max(0.0001, crypto.price * (1 + change));
-        
-        // Small chance of crash for expensive coins
-        const crashChance = crypto.price > 50000 ? 0.02 : crypto.price > 1000 ? 0.01 : 0.005;
+        const newPrice = safePrice(prevPrice * (1 + change), prevPrice);
+
+        const crashChance = prevPrice > 50000 ? 0.02 : prevPrice > 1000 ? 0.01 : 0.005;
         const isCrash = Math.random() < crashChance;
-        
-        const finalPrice = isCrash ? crypto.price * (0.3 + Math.random() * 0.4) : newPrice;
-        
+
+        const finalPrice = isCrash
+          ? safePrice(prevPrice * (0.3 + Math.random() * 0.4), prevPrice)
+          : newPrice;
+
         return {
           ...crypto,
           price: finalPrice,
-          change24h: ((finalPrice - crypto.price) / crypto.price) * 100,
+          change24h: safePercent(((finalPrice - prevPrice) / prevPrice) * 100),
         };
       });
 
