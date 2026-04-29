@@ -378,15 +378,23 @@ export const CryptoGame = ({ userCode }: CryptoGameProps) => {
     }
   }, [isEventActive, toast]);
 
-  // Load game state from localStorage
+  // Load game state from localStorage (with sanitization)
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setGameState(parsed);
+        const sanitized = sanitizeGameState(parsed);
+        if (!sanitized) {
+          console.warn("[CryptoGame] corrupted state, resetting crypto game only");
+          localStorage.removeItem(STORAGE_KEY);
+          initializeNewGame();
+        } else {
+          setGameState(sanitized);
+        }
       } catch (e) {
         console.error("Error loading game state:", e);
+        localStorage.removeItem(STORAGE_KEY);
         initializeNewGame();
       }
     } else {
