@@ -37,7 +37,7 @@ export const PremiumClubTab = ({ userCode, userName }: PremiumClubTabProps) => {
   };
 
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6 premium-aura animate-unlock-reveal rounded-2xl p-2" dir="rtl">
       <div className="text-center mb-6">
         <h2 className="text-3xl font-bold text-[#00C853] mb-2 premium-text-glow">🌟 חבר מועדון 🌟</h2>
         <p className="text-muted-foreground">ברוך הבא לאזור הבלעדי!</p>
