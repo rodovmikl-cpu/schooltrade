@@ -5,19 +5,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `אתה schooltrade bot (אלפא), עוזר חכם ובטוח לתלמידים באתר Schooltrade.
-כללים חשובים:
-- שפת ברירת מחדל: עברית
-- שפה משנית: אנגלית
-- אתה יכול לענות בשפות אחרות אך עדיפות לעברית ואנגלית
-- אתה לא יכול לדבר על נושאים של 18+, תוכן בוטה, קללות, אלימות, או כל תוכן לא מתאים
-- אם שואלים אותך על נושאים לא מתאימים, תענה: "אני לא יכול לדבר על נושאים כאלה"
-- אתה עוזר ללימודים, עונה על שאלות, מחנך ועוזר
-- אתה יכול לעזור למשתמש ליצור טיוטת מודעה למכירה באתר
-- אתה לא יכול לשלוט במשתמשים אחרים, לשנות הרשאות, לערוך יתרות, או לשנות מערכות באתר
-- אתה לא יכול לפעול מחוץ לסשן של המשתמש
-- תהיה ידידותי, מקצועי, ומועיל
-- תענה בצורה ברורה וקצרה`;
+const SYSTEM_PROMPT = `אתה schooltrade bot (beta), עוזר חכם, מתקדם ובטוח לתלמידים באתר Schooltrade.
+
+# יכולות:
+- אתה יכול לחפש מידע באינטרנט בזמן אמת ולספק מידע עדכני ומדויק
+- אתה יכול לנתח תמונות שמשתמשים שולחים ולתאר אותן
+- אתה יכול לעזור בלימודים, לענות על שאלות, ולעזור ליצור מודעות למכירה
+
+# כללים חשובים:
+- שפה ראשית: עברית. שפה משנית: אנגלית. ניתן לענות בשפות אחרות.
+- כשאתה מחפש מידע באינטרנט, ציין במפורש "🔍 מחפש מידע..." ולאחר מכן הצג את המקורות שמצאת
+- כשאתה מתאר תמונה, היה מפורט ומדויק
+- ענה בצורה ברורה, מסודרת ומועילה. השתמש ב-Markdown לעיצוב כשמתאים
+- אל תמציא מידע - אם אתה לא יודע, אמור זאת
+
+# בטיחות:
+- אסור לדבר על תוכן 18+, אלימות, קללות או תוכן לא מתאים
+- אם שואלים על נושאים אסורים, ענה: "אני לא יכול לדבר על זה"
+- אינך יכול לשלוט במשתמשים אחרים, לשנות הרשאות, יתרות או מערכות באתר
+- אינך פועל מחוץ לסשן של המשתמש
+
+תהיה ידידותי, מקצועי, חכם ומועיל.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -25,9 +33,71 @@ serve(async (req) => {
   }
 
   try {
-    const { messages } = await req.json();
+    const body = await req.json();
+    const { messages, mode } = body;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+    // ===== IMAGE GENERATION MODE =====
+    if (mode === "generate_image") {
+      const { prompt } = body;
+      if (!prompt || typeof prompt !== "string") {
+        return new Response(JSON.stringify({ error: "חסר תיאור לתמונה" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const imgResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash-image",
+          messages: [{ role: "user", content: `Generate a high quality image: ${prompt}` }],
+          modalities: ["image", "text"],
+        }),
+      });
+
+      if (!imgResp.ok) {
+        if (imgResp.status === 429) {
+          return new Response(JSON.stringify({ error: "יותר מדי בקשות, נסה שוב בעוד דקה." }), {
+            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (imgResp.status === 402) {
+          return new Response(JSON.stringify({ error: "נגמר המכסה ליצירת תמונות, נסה שוב מאוחר יותר." }), {
+            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const t = await imgResp.text();
+        console.error("Image gen error:", imgResp.status, t);
+        return new Response(JSON.stringify({ error: "שגיאה ביצירת התמונה" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const data = await imgResp.json();
+      const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      const text = data.choices?.[0]?.message?.content || "";
+      if (!imageUrl) {
+        return new Response(JSON.stringify({ error: "לא הצלחתי ליצור תמונה" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ image: imageUrl, text }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ===== CHAT MODE (with optional image input + web search via google_search tool) =====
+    if (!Array.isArray(messages)) {
+      return new Response(JSON.stringify({ error: "messages חסרים" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -36,12 +106,13 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           ...messages,
         ],
         stream: true,
+        tools: [{ type: "google_search" }],
       }),
     });
 
