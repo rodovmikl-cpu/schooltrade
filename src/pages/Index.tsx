@@ -27,12 +27,13 @@ import { Badge } from "@/components/ui/badge";
 import { GamesHub } from "@/components/games/GamesHub";
 import { KeifTab } from "@/components/keif/KeifTab";
 import { SchoolNews } from "@/components/games/SchoolNews";
+import { BooksTab } from "@/components/books/BooksTab";
 
 import { playSound } from "@/lib/sounds";
 
 const PREMIUM_USERS = ["161221063", "752025692", "426671703"];
 
-type ViewType = "login" | "register" | "posts" | "create" | "admin" | "security" | "halloween" | "christmas" | "premiumClub" | "limitedChat" | "games" | "keif" | "schoolNews";
+type ViewType = "login" | "register" | "posts" | "create" | "admin" | "security" | "halloween" | "christmas" | "premiumClub" | "limitedChat" | "games" | "keif" | "schoolNews" | "books";
 
 const Index = () => {
   const [user, setUser] = useState<{ code: string; name: string; role: string } | null>(null);
@@ -280,6 +281,7 @@ const Index = () => {
               <NavBtn v="games" label="🎮 משחקים" className="bg-gradient-to-r from-primary/10 to-accent/10 border-primary/30 hover:border-primary/60" />
               <NavBtn v="keif" label="🪙 החלף לקיפים" className="bg-gradient-to-r from-amber-500/10 to-yellow-500/5 border-amber-500/30 hover:border-amber-400/60" />
               <NavBtn v="schoolNews" label="📰 חדשות בית הספר" className="bg-gradient-to-r from-orange-500/10 to-amber-500/5 border-orange-500/30 hover:border-orange-400/60" />
+              <NavBtn v="books" label="📚 ספרים" className="bg-gradient-to-r from-amber-700/10 to-yellow-700/5 border-amber-700/30 hover:border-amber-600/60" />
               {isAdmin && (
                 <>
                   <NavBtn v="admin" label="🔧 ניהול מערכת" />
@@ -335,6 +337,7 @@ const Index = () => {
               {view === "premiumClub" && isPremiumUser && <PremiumClubTab userCode={user.code} userName={user.name} />}
               {view === "limitedChat" && !isPremiumUser && hasLimitedChat && <LimitedChatTab userCode={user.code} userName={user.name} />}
               {view === "schoolNews" && <SchoolNews userCode={user.code} userName={user.name} />}
+              {view === "books" && <BooksTab userCode={user.code} userName={user.name} />}
             </div>
           </div>
         )}
