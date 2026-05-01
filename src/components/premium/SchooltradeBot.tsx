@@ -47,14 +47,31 @@ const fileToDataUrl = (file: File): Promise<string> => new Promise((res, rej) =>
 
 const detectImageRequest = (text: string): string | null => {
   const t = text.trim();
-  const patterns = [
-    /^(?:צייר|תצייר|תייצר|ייצר|תיצור|צור|תכין|הכן)\s+(?:לי\s+)?(?:תמונה|תמונת)\s+(?:של\s+)?(.+)$/i,
-    /^(?:generate|create|draw|make)\s+(?:an?\s+)?(?:image|picture|photo)\s+(?:of\s+)?(.+)$/i,
-    /^תמונה של\s+(.+)$/i,
+  if (!t) return null;
+  // Hebrew verbs that indicate image creation
+  const hebVerbs = "(?:צייר|תצייר|ציירי|תייצר|ייצר|תיצור|צור|תכין|הכן|תעשה|עשה|תפיק|הפק|תרשום|רשום|תכייר|כייר)";
+  // English verbs
+  const engVerbs = "(?:generate|create|draw|make|render|produce|design|paint|illustrate|sketch|show)";
+  // Hebrew nouns for image
+  const hebNouns = "(?:תמונה|תמונת|ציור|תרשים|איור|פוסטר|לוגו|אווטאר|אווטר|דמות|רקע)";
+  // English nouns
+  const engNouns = "(?:image|picture|photo|drawing|illustration|poster|logo|avatar|render|sketch|painting|wallpaper|background)";
+
+  const patterns: RegExp[] = [
+    // צייר/תצייר לי תמונה של ...
+    new RegExp(`^${hebVerbs}\\s+(?:לי\\s+|בבקשה\\s+)?${hebNouns}\\s+(?:של\\s+|עם\\s+)?(.+)$`, "i"),
+    // אני רוצה / רציתי / אפשר / תוכל לצייר/לייצר / תן לי תמונה של ...
+    new RegExp(`^(?:אני\\s+רוצה|רציתי|אפשר|תוכל|יכול\\s+אתה|תן\\s+לי|תביא\\s+לי|הראה\\s+לי)\\s+.{0,30}?${hebNouns}\\s+(?:של\\s+|עם\\s+)?(.+)$`, "i"),
+    // תמונה של ...
+    new RegExp(`^${hebNouns}\\s+(?:של\\s+|עם\\s+)(.+)$`, "i"),
+    // English: generate/create an image of ...
+    new RegExp(`^${engVerbs}\\s+(?:me\\s+)?(?:an?\\s+|the\\s+)?${engNouns}\\s+(?:of\\s+|with\\s+|showing\\s+)?(.+)$`, "i"),
+    // English: I want / can you make an image of ...
+    new RegExp(`^(?:i\\s+want|can\\s+you|could\\s+you|please)\\s+.{0,30}?${engNouns}\\s+(?:of\\s+|with\\s+)?(.+)$`, "i"),
   ];
   for (const p of patterns) {
     const m = t.match(p);
-    if (m) return m[1].trim();
+    if (m && m[1] && m[1].trim().length > 1) return m[1].trim();
   }
   return null;
 };
@@ -270,6 +287,31 @@ export const SchooltradeBot = () => {
         setIsLoading(false);
         setStatusText("");
         return;
+      }
+
+      // Server may return JSON (auto-generated image) instead of an SSE stream
+      const ct = resp.headers.get("Content-Type") || "";
+      if (ct.includes("application/json")) {
+        const data = await resp.json();
+        if (data.image) {
+          setStatusText("");
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: data.text || "הנה התמונה שביקשת 🎨",
+            imageUrl: data.image,
+            isGenerated: true,
+            timestamp: Date.now(),
+          }]);
+          playPremiumSound("sparkle");
+          setIsLoading(false);
+          return;
+        }
+        if (data.error) {
+          upsertAssistant(data.error);
+          setIsLoading(false);
+          setStatusText("");
+          return;
+        }
       }
 
       const reader = resp.body.getReader();
