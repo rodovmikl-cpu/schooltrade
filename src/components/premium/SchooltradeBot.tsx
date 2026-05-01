@@ -289,6 +289,31 @@ export const SchooltradeBot = () => {
         return;
       }
 
+      // Server may return JSON (auto-generated image) instead of an SSE stream
+      const ct = resp.headers.get("Content-Type") || "";
+      if (ct.includes("application/json")) {
+        const data = await resp.json();
+        if (data.image) {
+          setStatusText("");
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: data.text || "הנה התמונה שביקשת 🎨",
+            imageUrl: data.image,
+            isGenerated: true,
+            timestamp: Date.now(),
+          }]);
+          playPremiumSound("sparkle");
+          setIsLoading(false);
+          return;
+        }
+        if (data.error) {
+          upsertAssistant(data.error);
+          setIsLoading(false);
+          setStatusText("");
+          return;
+        }
+      }
+
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let textBuffer = "";
