@@ -468,6 +468,7 @@ export const BooksTab = ({ userCode, userName }: BooksTabProps) => {
                         title: b.title,
                         author: b.author_name,
                         content: b.content,
+                        contentStatus: "user_full",
                         isMine: true,
                       }}
                       onOpen={() =>
@@ -476,6 +477,7 @@ export const BooksTab = ({ userCode, userName }: BooksTabProps) => {
                           title: b.title,
                           author: b.author_name,
                           content: b.content,
+                          contentStatus: "user_full",
                           isMine: true,
                         })
                       }
