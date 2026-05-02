@@ -725,6 +725,36 @@ const BookReader = ({ book, onClose }: { book: ReadingBook; onClose: () => void 
         <div className="text-center mb-3">
           <h3 className="text-2xl font-bold">{book.title}</h3>
           <p className="text-sm text-muted-foreground">מאת {book.author}</p>
+          {book.isOfficial && (
+            <div className="mt-2 flex flex-wrap justify-center gap-2 text-xs">
+              {book.contentStatus === "public_domain" && !fullContent && !loadError && (
+                <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100">
+                  {isLoadingFull ? "טוען ספר מלא..." : "ספר בנחלת הכלל"}
+                </Badge>
+              )}
+              {fullContent && (
+                <Badge className="bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
+                  הספר המלא נטען מ־{book.sourceLabel || "מקור ציבורי"}
+                </Badge>
+              )}
+              {isPreviewOnly && (
+                <Badge className="bg-blue-100 text-blue-900 hover:bg-blue-100">
+                  תצוגה מקדימה + תקציר
+                </Badge>
+              )}
+            </div>
+          )}
+          {loadError && <p className="text-xs text-muted-foreground mt-2">{loadError}</p>}
+          {isPreviewOnly && book.externalUrl && (
+            <a
+              href={book.externalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mt-2 text-sm text-amber-700 hover:underline"
+            >
+              המשך קריאה במקור חיצוני
+            </a>
+          )}
         </div>
 
         <div
@@ -746,6 +776,9 @@ const BookReader = ({ book, onClose }: { book: ReadingBook; onClose: () => void 
             <div className="whitespace-pre-wrap" style={{ textAlign: "justify" }}>
               {pages[pageIndex]}
             </div>
+            {isLoadingFull && pageIndex === pages.length - 1 && (
+              <div className="mt-6 text-center text-sm text-muted-foreground">טוען עמודים נוספים...</div>
+            )}
           </div>
         </div>
 
