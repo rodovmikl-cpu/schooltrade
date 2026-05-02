@@ -745,6 +745,9 @@ const BookReader = ({ book, onClose }: { book: ReadingBook; onClose: () => void 
             </div>
           )}
           {loadError && <p className="text-xs text-muted-foreground mt-2">{loadError}</p>}
+          {isPreviewOnly && book.preview && (
+            <p className="text-sm text-muted-foreground mt-2 max-w-xl mx-auto">תקציר: {book.preview}</p>
+          )}
           {isPreviewOnly && book.externalUrl && (
             <a
               href={book.externalUrl}
