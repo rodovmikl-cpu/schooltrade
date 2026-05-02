@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, TouchEvent } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, TouchEvent } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,12 @@ type ReadingBook = {
   title: string;
   author: string;
   content: string;
+  preview?: string;
+  contentStatus?: "public_domain" | "preview" | "user_full";
+  fullTextUrl?: string;
+  externalUrl?: string;
+  sourceLabel?: string;
+  expectedMinLength?: number;
   isOfficial?: boolean;
   isMine?: boolean;
 };
@@ -236,6 +242,12 @@ export const BooksTab = ({ userCode, userName }: BooksTabProps) => {
     title: o.title,
     author: o.author,
     content: o.content,
+    preview: o.preview,
+    contentStatus: o.contentStatus,
+    fullTextUrl: o.fullTextUrl,
+    externalUrl: o.externalUrl,
+    sourceLabel: o.sourceLabel,
+    expectedMinLength: o.expectedMinLength,
     isOfficial: true,
   }));
 
@@ -244,6 +256,7 @@ export const BooksTab = ({ userCode, userName }: BooksTabProps) => {
     title: b.title,
     author: b.author_name,
     content: b.content,
+    contentStatus: "user_full",
     isMine: b.author_code === userCode,
   }));
 
@@ -455,6 +468,7 @@ export const BooksTab = ({ userCode, userName }: BooksTabProps) => {
                         title: b.title,
                         author: b.author_name,
                         content: b.content,
+                        contentStatus: "user_full",
                         isMine: true,
                       }}
                       onOpen={() =>
@@ -463,6 +477,7 @@ export const BooksTab = ({ userCode, userName }: BooksTabProps) => {
                           title: b.title,
                           author: b.author_name,
                           content: b.content,
+                          contentStatus: "user_full",
                           isMine: true,
                         })
                       }
@@ -521,7 +536,7 @@ const BookCard = ({
   delay: number;
   badge?: string;
 }) => {
-  const preview = book.content.replace(/\s+/g, " ").trim().slice(0, 110);
+  const preview = (book.preview || book.content).replace(/\s+/g, " ").trim().slice(0, 110);
   return (
     <button
       onClick={onOpen}
@@ -537,7 +552,7 @@ const BookCard = ({
       <div className="flex justify-between items-center">
         {book.isOfficial ? (
           <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100 text-[10px]">
-            📖 ספר רשמי
+            {book.contentStatus === "public_domain" ? "📖 נחלת הכלל" : "📄 תצוגה מקדימה"}
           </Badge>
         ) : (
           <Badge className="bg-emerald-100 text-emerald-900 hover:bg-emerald-100 text-[10px]">
@@ -552,28 +567,86 @@ const BookCard = ({
   );
 };
 
+const paginateText = (text: string, maxChars = 1200) => {
+  const pages: string[] = [];
+  const pushPart = (part: string) => {
+    const words = part.trim().split(/\s+/).filter(Boolean);
+    let line = "";
+    for (const word of words) {
+      const next = line ? `${line} ${word}` : word;
+      if (next.length > maxChars && line) {
+        pages.push(line);
+        line = word;
+      } else {
+        line = next;
+      }
+    }
+    if (line) pages.push(line);
+  };
+  const paragraphs = text.replace(/\r\n/g, "\n").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  let buffer = "";
+  for (const paragraph of paragraphs) {
+    if (paragraph.length > maxChars) {
+      if (buffer) {
+        pages.push(buffer);
+        buffer = "";
+      }
+      pushPart(paragraph);
+      continue;
+    }
+    const next = buffer ? `${buffer}\n\n${paragraph}` : paragraph;
+    if (next.length > maxChars && buffer) {
+      pages.push(buffer);
+      buffer = paragraph;
+    } else {
+      buffer = next;
+    }
+  }
+  if (buffer) pages.push(buffer);
+  return pages.length ? pages : [text];
+};
+
 const BookReader = ({ book, onClose }: { book: ReadingBook; onClose: () => void }) => {
   const [pageIndex, setPageIndex] = useState(0);
   const [animKey, setAnimKey] = useState(0);
   const [direction, setDirection] = useState<"next" | "prev">("next");
+  const [fullContent, setFullContent] = useState<string | null>(null);
+  const [isLoadingFull, setIsLoadingFull] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Pagination
-  const pages = (() => {
-    const chunks: string[] = [];
-    const paragraphs = book.content.split(/\n+/).filter(Boolean);
-    let buf = "";
-    const max = 900;
-    for (const p of paragraphs) {
-      if ((buf + "\n\n" + p).length > max && buf.length > 0) {
-        chunks.push(buf);
-        buf = p;
-      } else {
-        buf = buf ? buf + "\n\n" + p : p;
-      }
-    }
-    if (buf) chunks.push(buf);
-    return chunks.length ? chunks : [book.content];
-  })();
+  useEffect(() => {
+    let active = true;
+    setPageIndex(0);
+    setFullContent(null);
+    setLoadError(null);
+
+    if (book.contentStatus !== "public_domain" || !book.fullTextUrl) return;
+
+    setIsLoadingFull(true);
+    supabase.functions.invoke("book-content", { body: { url: book.fullTextUrl } })
+      .then(({ data, error }) => {
+        if (!active) return;
+        const content = typeof data?.content === "string" ? data.content.trim() : "";
+        const minLength = book.expectedMinLength || 12000;
+        if (error || content.length < minLength) {
+          setLoadError("הספר המלא לא נטען בשלמותו, לכן מוצגת תצוגה מקדימה בלבד.");
+          return;
+        }
+        setFullContent(content);
+      })
+      .catch(() => {
+        if (active) setLoadError("הספר המלא לא נטען בשלמותו, לכן מוצגת תצוגה מקדימה בלבד.");
+      })
+      .finally(() => {
+        if (active) setIsLoadingFull(false);
+      });
+
+    return () => { active = false; };
+  }, [book.id, book.contentStatus, book.fullTextUrl, book.expectedMinLength]);
+
+  const displayContent = fullContent || book.content;
+  const isPreviewOnly = book.contentStatus === "preview" || (!!loadError && !fullContent);
+  const pages = useMemo(() => paginateText(displayContent), [displayContent]);
 
   const goNext = useCallback(() => {
     setPageIndex((prev) => {
@@ -652,6 +725,39 @@ const BookReader = ({ book, onClose }: { book: ReadingBook; onClose: () => void 
         <div className="text-center mb-3">
           <h3 className="text-2xl font-bold">{book.title}</h3>
           <p className="text-sm text-muted-foreground">מאת {book.author}</p>
+          {book.isOfficial && (
+            <div className="mt-2 flex flex-wrap justify-center gap-2 text-xs">
+              {book.contentStatus === "public_domain" && !fullContent && !loadError && (
+                <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100">
+                  {isLoadingFull ? "טוען ספר מלא..." : "ספר בנחלת הכלל"}
+                </Badge>
+              )}
+              {fullContent && (
+                <Badge className="bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
+                  הספר המלא נטען מ־{book.sourceLabel || "מקור ציבורי"}
+                </Badge>
+              )}
+              {isPreviewOnly && (
+                <Badge className="bg-blue-100 text-blue-900 hover:bg-blue-100">
+                  תצוגה מקדימה + תקציר
+                </Badge>
+              )}
+            </div>
+          )}
+          {loadError && <p className="text-xs text-muted-foreground mt-2">{loadError}</p>}
+          {isPreviewOnly && book.preview && (
+            <p className="text-sm text-muted-foreground mt-2 max-w-xl mx-auto">תקציר: {book.preview}</p>
+          )}
+          {isPreviewOnly && book.externalUrl && (
+            <a
+              href={book.externalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mt-2 text-sm text-amber-700 hover:underline"
+            >
+              המשך קריאה במקור חיצוני
+            </a>
+          )}
         </div>
 
         <div
@@ -673,6 +779,9 @@ const BookReader = ({ book, onClose }: { book: ReadingBook; onClose: () => void 
             <div className="whitespace-pre-wrap" style={{ textAlign: "justify" }}>
               {pages[pageIndex]}
             </div>
+            {isLoadingFull && pageIndex === pages.length - 1 && (
+              <div className="mt-6 text-center text-sm text-muted-foreground">טוען עמודים נוספים...</div>
+            )}
           </div>
         </div>
 

@@ -5,6 +5,11 @@ export interface OfficialBook {
   author: string;
   preview: string;
   content: string;
+  contentStatus: "public_domain" | "preview";
+  fullTextUrl?: string;
+  externalUrl: string;
+  sourceLabel?: string;
+  expectedMinLength?: number;
 }
 
 const ch = (title: string, body: string) => `\n\n— ${title} —\n\n${body}`;
@@ -12,12 +17,29 @@ const ch = (title: string, body: string) => `\n\n— ${title} —\n\n${body}`;
 const longText = (theme: string, paragraphs: string[]) =>
   paragraphs.map((p, i) => ch(`פרק ${i + 1}`, p)).join("");
 
+const gutenberg = (id: string) => `https://www.gutenberg.org/cache/epub/${id}/pg${id}.txt`;
+const pd = (id: string, min = 12000) => ({ sourceUrl: gutenberg(id), sourceLabel: "Project Gutenberg", expectedMinLength: min });
+
+const PUBLIC_DOMAIN_SOURCES: Record<string, ReturnType<typeof pd>> = {
+  "1": pd("11"), "2": pd("16"), "4": pd("2701"), "6": pd("164"), "7": pd("103"),
+  "8": pd("521"), "9": pd("730"), "10": pd("1400"), "11": pd("1342"), "12": pd("1260"),
+  "13": pd("768"), "14": pd("308"), "15": pd("74"), "16": pd("76"), "17": pd("55"),
+  "18": pd("236"), "19": pd("113"), "22": pd("1727"), "24": pd("996"), "25": pd("1524"),
+  "26": pd("1513"), "27": pd("1533"), "31": pd("2554"), "33": pd("1399"), "34": pd("2600"),
+  "36": pd("2413"), "37": pd("135"), "39": pd("1184"), "40": pd("1257"), "42": pd("1081"),
+};
+
 const make = (id: string, title: string, author: string, preview: string, paragraphs: string[]): OfficialBook => ({
   id: `official-${id}`,
   title,
   author,
   preview,
   content: longText(title, paragraphs),
+  contentStatus: PUBLIC_DOMAIN_SOURCES[id] ? "public_domain" : "preview",
+  fullTextUrl: PUBLIC_DOMAIN_SOURCES[id]?.sourceUrl,
+  sourceLabel: PUBLIC_DOMAIN_SOURCES[id]?.sourceLabel,
+  expectedMinLength: PUBLIC_DOMAIN_SOURCES[id]?.expectedMinLength,
+  externalUrl: PUBLIC_DOMAIN_SOURCES[id]?.sourceUrl || `https://www.google.com/search?q=${encodeURIComponent(`${title} ${author} ספר`)}`,
 });
 
 const P = (s: string) => s.repeat(3);
