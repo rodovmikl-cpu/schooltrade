@@ -48,6 +48,18 @@ const detectImageIntent = (text: string): string | null => {
     const m = t.match(p);
     if (m && m[1] && m[1].trim().length > 1) return m[1].trim();
   }
+  const broadImageIntent = new RegExp(`(${hebVerbs}|${engVerbs}|${hebNouns}|${engNouns})`, "i");
+  const asksCreation = /(?:לי|בבקשה|של|עם|generate|create|draw|make|image|picture|תמונה|ציור|תצייר|צייר|תיצור|צור|תכין|עשה)/i.test(t);
+  if (broadImageIntent.test(t) && asksCreation) {
+    const cleaned = t
+      .replace(new RegExp(`^${hebVerbs}\\s*(?:לי|בבקשה)?\\s*`, "i"), "")
+      .replace(new RegExp(`^${engVerbs}\\s*(?:me)?\\s*`, "i"), "")
+      .replace(/^(?:אני רוצה|אפשר|תוכל|בבקשה|please|can you|i want)\s*/i, "")
+      .replace(new RegExp(`^${hebNouns}\\s*(?:של|עם)?\\s*`, "i"), "")
+      .replace(new RegExp(`^(?:an?\\s+|the\\s+)?${engNouns}\\s*(?:of|with|showing)?\\s*`, "i"), "")
+      .trim();
+    return cleaned.length > 1 ? cleaned : t;
+  }
   return null;
 };
 
@@ -180,7 +192,10 @@ serve(async (req) => {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
           }
-          // fall through to chat if generation totally failed
+          return new Response(JSON.stringify({ error: "שגיאה ביצירת תמונה" }), {
+            status: result.status || 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
       }
     }
