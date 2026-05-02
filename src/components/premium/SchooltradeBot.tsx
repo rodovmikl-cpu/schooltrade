@@ -116,6 +116,16 @@ export const SchooltradeBot = () => {
       localStorage.removeItem(getChatKey());
       setMessages([]);
       setClearing(false);
+      const lateImagePrompt = !attachedImage && (
+        detectImageRequest(text) ||
+        ((/מייצר|יוצר|מצייר|generating|creating|drawing/i.test(assistantSoFar) && /תמונה|ציור|image|picture|drawing/i.test(`${assistantSoFar} ${text}`)) ? text : null)
+      );
+      if (lateImagePrompt) {
+        setMessages(prev => prev.filter((m) => !(m.role === "assistant" && m.content === assistantSoFar && !m.imageUrl)));
+        await generateImage(lateImagePrompt);
+        return;
+      }
+
       playPremiumSound("sparkle");
     }, 400);
   };
