@@ -536,7 +536,7 @@ const BookCard = ({
   delay: number;
   badge?: string;
 }) => {
-  const preview = book.content.replace(/\s+/g, " ").trim().slice(0, 110);
+  const preview = (book.preview || book.content).replace(/\s+/g, " ").trim().slice(0, 110);
   return (
     <button
       onClick={onOpen}
@@ -552,7 +552,7 @@ const BookCard = ({
       <div className="flex justify-between items-center">
         {book.isOfficial ? (
           <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100 text-[10px]">
-            📖 ספר רשמי
+            {book.contentStatus === "public_domain" ? "📖 נחלת הכלל" : "📄 תצוגה מקדימה"}
           </Badge>
         ) : (
           <Badge className="bg-emerald-100 text-emerald-900 hover:bg-emerald-100 text-[10px]">
