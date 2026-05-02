@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, TouchEvent } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, TouchEvent } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,12 @@ type ReadingBook = {
   title: string;
   author: string;
   content: string;
+  preview?: string;
+  contentStatus?: "public_domain" | "preview" | "user_full";
+  fullTextUrl?: string;
+  externalUrl?: string;
+  sourceLabel?: string;
+  expectedMinLength?: number;
   isOfficial?: boolean;
   isMine?: boolean;
 };
@@ -236,6 +242,12 @@ export const BooksTab = ({ userCode, userName }: BooksTabProps) => {
     title: o.title,
     author: o.author,
     content: o.content,
+    preview: o.preview,
+    contentStatus: o.contentStatus,
+    fullTextUrl: o.fullTextUrl,
+    externalUrl: o.externalUrl,
+    sourceLabel: o.sourceLabel,
+    expectedMinLength: o.expectedMinLength,
     isOfficial: true,
   }));
 
@@ -244,6 +256,7 @@ export const BooksTab = ({ userCode, userName }: BooksTabProps) => {
     title: b.title,
     author: b.author_name,
     content: b.content,
+    contentStatus: "user_full",
     isMine: b.author_code === userCode,
   }));
 
