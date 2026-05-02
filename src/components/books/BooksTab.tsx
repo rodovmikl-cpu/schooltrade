@@ -567,28 +567,86 @@ const BookCard = ({
   );
 };
 
+const paginateText = (text: string, maxChars = 1200) => {
+  const pages: string[] = [];
+  const pushPart = (part: string) => {
+    const words = part.trim().split(/\s+/).filter(Boolean);
+    let line = "";
+    for (const word of words) {
+      const next = line ? `${line} ${word}` : word;
+      if (next.length > maxChars && line) {
+        pages.push(line);
+        line = word;
+      } else {
+        line = next;
+      }
+    }
+    if (line) pages.push(line);
+  };
+  const paragraphs = text.replace(/\r\n/g, "\n").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  let buffer = "";
+  for (const paragraph of paragraphs) {
+    if (paragraph.length > maxChars) {
+      if (buffer) {
+        pages.push(buffer);
+        buffer = "";
+      }
+      pushPart(paragraph);
+      continue;
+    }
+    const next = buffer ? `${buffer}\n\n${paragraph}` : paragraph;
+    if (next.length > maxChars && buffer) {
+      pages.push(buffer);
+      buffer = paragraph;
+    } else {
+      buffer = next;
+    }
+  }
+  if (buffer) pages.push(buffer);
+  return pages.length ? pages : [text];
+};
+
 const BookReader = ({ book, onClose }: { book: ReadingBook; onClose: () => void }) => {
   const [pageIndex, setPageIndex] = useState(0);
   const [animKey, setAnimKey] = useState(0);
   const [direction, setDirection] = useState<"next" | "prev">("next");
+  const [fullContent, setFullContent] = useState<string | null>(null);
+  const [isLoadingFull, setIsLoadingFull] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Pagination
-  const pages = (() => {
-    const chunks: string[] = [];
-    const paragraphs = book.content.split(/\n+/).filter(Boolean);
-    let buf = "";
-    const max = 900;
-    for (const p of paragraphs) {
-      if ((buf + "\n\n" + p).length > max && buf.length > 0) {
-        chunks.push(buf);
-        buf = p;
-      } else {
-        buf = buf ? buf + "\n\n" + p : p;
-      }
-    }
-    if (buf) chunks.push(buf);
-    return chunks.length ? chunks : [book.content];
-  })();
+  useEffect(() => {
+    let active = true;
+    setPageIndex(0);
+    setFullContent(null);
+    setLoadError(null);
+
+    if (book.contentStatus !== "public_domain" || !book.fullTextUrl) return;
+
+    setIsLoadingFull(true);
+    supabase.functions.invoke("book-content", { body: { url: book.fullTextUrl } })
+      .then(({ data, error }) => {
+        if (!active) return;
+        const content = typeof data?.content === "string" ? data.content.trim() : "";
+        const minLength = book.expectedMinLength || 12000;
+        if (error || content.length < minLength) {
+          setLoadError("הספר המלא לא נטען בשלמותו, לכן מוצגת תצוגה מקדימה בלבד.");
+          return;
+        }
+        setFullContent(content);
+      })
+      .catch(() => {
+        if (active) setLoadError("הספר המלא לא נטען בשלמותו, לכן מוצגת תצוגה מקדימה בלבד.");
+      })
+      .finally(() => {
+        if (active) setIsLoadingFull(false);
+      });
+
+    return () => { active = false; };
+  }, [book.id, book.contentStatus, book.fullTextUrl, book.expectedMinLength]);
+
+  const displayContent = fullContent || book.content;
+  const isPreviewOnly = book.contentStatus === "preview" || (!!loadError && !fullContent);
+  const pages = useMemo(() => paginateText(displayContent), [displayContent]);
 
   const goNext = useCallback(() => {
     setPageIndex((prev) => {
