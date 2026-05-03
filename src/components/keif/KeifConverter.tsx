@@ -26,6 +26,7 @@ const SOURCE_GAMES = [
   { key: "hebrew", label: "📚 מישחק עברית", storageKey: "hebrewGameState", field: "converted_hebrew" },
   { key: "english", label: "🇬🇧 מישחק אנגלית", storageKey: "englishGameState", field: "converted_english" },
   { key: "crypto", label: "💰 קריפטו-גיים", storageKey: "crypto-game-state", field: "converted_crypto" },
+  { key: "arcade", label: "🎮 משחקי ארקייד", storageKey: "__arcade__", field: "converted_arcade" },
 ];
 
 const getCryptoTotalValue = (parsed: any): number => {
