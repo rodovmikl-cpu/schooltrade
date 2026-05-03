@@ -148,6 +148,7 @@ export const KeifConverter = ({ userCode, userName }: KeifConverterProps) => {
         converted_hebrew: latest?.converted_hebrew ?? 0,
         converted_english: latest?.converted_english ?? 0,
         converted_crypto: latest?.converted_crypto ?? 0,
+        converted_arcade: (latest as any)?.converted_arcade ?? 0,
       };
 
       const upsertData: any = {
