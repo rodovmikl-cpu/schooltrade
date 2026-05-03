@@ -147,8 +147,36 @@ export type Database = {
         }
         Relationships: []
       }
+      game_scores: {
+        Row: {
+          created_at: string
+          game_key: string
+          id: string
+          score: number
+          user_code: string
+          user_name: string
+        }
+        Insert: {
+          created_at?: string
+          game_key: string
+          id?: string
+          score?: number
+          user_code: string
+          user_name: string
+        }
+        Update: {
+          created_at?: string
+          game_key?: string
+          id?: string
+          score?: number
+          user_code?: string
+          user_name?: string
+        }
+        Relationships: []
+      }
       keif_balances: {
         Row: {
+          converted_arcade: number
           converted_crypto: number
           converted_english: number
           converted_hebrew: number
@@ -161,6 +189,7 @@ export type Database = {
           user_name: string
         }
         Insert: {
+          converted_arcade?: number
           converted_crypto?: number
           converted_english?: number
           converted_hebrew?: number
@@ -173,6 +202,7 @@ export type Database = {
           user_name: string
         }
         Update: {
+          converted_arcade?: number
           converted_crypto?: number
           converted_english?: number
           converted_hebrew?: number

@@ -1,0 +1,1 @@
+ALTER TABLE public.keif_balances ADD COLUMN IF NOT EXISTS converted_arcade numeric NOT NULL DEFAULT 0;

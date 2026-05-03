@@ -26,6 +26,7 @@ const SOURCE_GAMES = [
   { key: "hebrew", label: "📚 מישחק עברית", storageKey: "hebrewGameState", field: "converted_hebrew" },
   { key: "english", label: "🇬🇧 מישחק אנגלית", storageKey: "englishGameState", field: "converted_english" },
   { key: "crypto", label: "💰 קריפטו-גיים", storageKey: "crypto-game-state", field: "converted_crypto" },
+  { key: "arcade", label: "🎮 משחקי ארקייד", storageKey: "__arcade__", field: "converted_arcade" },
 ];
 
 const getCryptoTotalValue = (parsed: any): number => {
@@ -52,6 +53,11 @@ const getCryptoTotalValue = (parsed: any): number => {
 
 const getGameBalance = (storageKey: string): number => {
   try {
+    if (storageKey === "__arcade__") {
+      // sum arcade bests
+      const keys = ["flappy","runner","idle","snake","puzzle2048"];
+      return keys.reduce((sum, k) => sum + (parseInt(localStorage.getItem(`arcade-best-${k}`) || "0", 10) || 0), 0);
+    }
     const raw = localStorage.getItem(storageKey);
     if (!raw) return 0;
     const parsed = JSON.parse(raw);
@@ -142,6 +148,7 @@ export const KeifConverter = ({ userCode, userName }: KeifConverterProps) => {
         converted_hebrew: latest?.converted_hebrew ?? 0,
         converted_english: latest?.converted_english ?? 0,
         converted_crypto: latest?.converted_crypto ?? 0,
+        converted_arcade: (latest as any)?.converted_arcade ?? 0,
       };
 
       const upsertData: any = {
