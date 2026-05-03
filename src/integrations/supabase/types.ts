@@ -147,6 +147,33 @@ export type Database = {
         }
         Relationships: []
       }
+      game_scores: {
+        Row: {
+          created_at: string
+          game_key: string
+          id: string
+          score: number
+          user_code: string
+          user_name: string
+        }
+        Insert: {
+          created_at?: string
+          game_key: string
+          id?: string
+          score?: number
+          user_code: string
+          user_name: string
+        }
+        Update: {
+          created_at?: string
+          game_key?: string
+          id?: string
+          score?: number
+          user_code?: string
+          user_name?: string
+        }
+        Relationships: []
+      }
       keif_balances: {
         Row: {
           converted_crypto: number
