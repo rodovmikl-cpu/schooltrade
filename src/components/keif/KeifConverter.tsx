@@ -53,6 +53,11 @@ const getCryptoTotalValue = (parsed: any): number => {
 
 const getGameBalance = (storageKey: string): number => {
   try {
+    if (storageKey === "__arcade__") {
+      // sum arcade bests
+      const keys = ["flappy","runner","idle","snake","puzzle2048"];
+      return keys.reduce((sum, k) => sum + (parseInt(localStorage.getItem(`arcade-best-${k}`) || "0", 10) || 0), 0);
+    }
     const raw = localStorage.getItem(storageKey);
     if (!raw) return 0;
     const parsed = JSON.parse(raw);
