@@ -22,9 +22,9 @@ interface KeifBalance {
 }
 
 const SOURCE_GAMES = [
-  { key: "math", label: "🧮 מישחק מתמטי", storageKey: "mathGameState", field: "converted_math" },
-  { key: "hebrew", label: "📚 מישחק עברית", storageKey: "hebrewGameState", field: "converted_hebrew" },
-  { key: "english", label: "🇬🇧 מישחק אנגלית", storageKey: "englishGameState", field: "converted_english" },
+  { key: "math", label: "🧮 משחק מתמטי", storageKey: "mathGameState", field: "converted_math" },
+  { key: "hebrew", label: "📚 משחק עברית", storageKey: "hebrewGameState", field: "converted_hebrew" },
+  { key: "english", label: "🇬🇧 משחק אנגלית", storageKey: "englishGameState", field: "converted_english" },
   { key: "crypto", label: "💰 קריפטו-גיים", storageKey: "crypto-game-state", field: "converted_crypto" },
   { key: "arcade", label: "🎮 משחקי ארקייד", storageKey: "__arcade__", field: "converted_arcade" },
 ];

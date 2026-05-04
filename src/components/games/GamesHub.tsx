@@ -30,10 +30,10 @@ const GAMES = [
   { key: "puzzle2048" as GameKey, label: "🧩 פאזל 2048", desc: "מזג מספרים זהים והגע ל-2048", color: "from-pink-500/20 to-rose-500/10 border-pink-500/40 hover:border-pink-400/70" },
   { key: "snake" as GameKey, label: "🐍 משחק הנחש", desc: "אסוף אוכל והתחמק מהקירות", color: "from-green-500/20 to-emerald-500/10 border-green-500/40 hover:border-green-400/70" },
   { key: "crypto" as GameKey, label: "💰 קריפטו-גיים", desc: "סחר במטבעות קריפטו וצבור עושר", color: "from-yellow-500/20 to-amber-500/10 border-yellow-500/40 hover:border-yellow-400/70" },
-  { key: "math" as GameKey, label: "🧮 מישחק מתמטי", desc: "25 שאלות מותאמות לרמת הכיתה שלך", color: "from-blue-500/20 to-indigo-500/10 border-blue-500/40 hover:border-blue-400/70" },
-  { key: "hebrew" as GameKey, label: "📚 מישחק עברית", desc: "קרא סיפורים וענה על שאלות הבנה", color: "from-purple-500/20 to-violet-500/10 border-purple-500/40 hover:border-purple-400/70" },
-  { key: "english" as GameKey, label: "🇬🇧 מישחק אנגלית", desc: "Read stories and answer comprehension questions", color: "from-cyan-500/20 to-sky-500/10 border-cyan-500/40 hover:border-cyan-400/70" },
-  { key: "flags" as GameKey, label: "🌍 מישחק המדינות", desc: "זהה דגלים ובחר את המדינה הנכונה", color: "from-teal-500/20 to-emerald-500/10 border-teal-500/40 hover:border-teal-400/70" },
+  { key: "math" as GameKey, label: "🧮 משחק מתמטי", desc: "25 שאלות מותאמות לרמת הכיתה שלך", color: "from-blue-500/20 to-indigo-500/10 border-blue-500/40 hover:border-blue-400/70" },
+  { key: "hebrew" as GameKey, label: "📚 משחק עברית", desc: "קרא סיפורים וענה על שאלות הבנה", color: "from-purple-500/20 to-violet-500/10 border-purple-500/40 hover:border-purple-400/70" },
+  { key: "english" as GameKey, label: "🇬🇧 משחק אנגלית", desc: "קרא סיפורים וענה על שאלות הבנה", color: "from-cyan-500/20 to-sky-500/10 border-cyan-500/40 hover:border-cyan-400/70" },
+  { key: "flags" as GameKey, label: "🌍 משחק המדינות", desc: "זהה דגלים ובחר את המדינה הנכונה", color: "from-teal-500/20 to-emerald-500/10 border-teal-500/40 hover:border-teal-400/70" },
 ];
 
 export const GamesHub = ({ userCode, userName }: GamesHubProps) => {
