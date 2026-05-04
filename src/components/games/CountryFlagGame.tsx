@@ -183,7 +183,7 @@ export const CountryFlagGame = () => {
   if (!difficulty || gameOver) {
     return (
       <div className="max-w-lg mx-auto space-y-6 text-center" dir="rtl">
-        <h2 className="text-3xl font-bold">🌍 מישחק המדינות</h2>
+        <h2 className="text-3xl font-bold">🌍 משחק המדינות</h2>
         <p className="text-muted-foreground">זהה את הדגל ובחר את המדינה הנכונה</p>
 
         {gameOver && (
