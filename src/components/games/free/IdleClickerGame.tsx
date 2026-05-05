@@ -112,7 +112,7 @@ export const IdleClickerGame = ({ userCode, userName }: Props) => {
           </button>
         </div>
       </div>
-      <style>{`@keyframes floatUp { 0%{transform:translate(-50%,-50%) scale(1);opacity:1} 100%{transform:translate(-50%,-120%) scale(1.4);opacity:0} }`}</style>
+      <style>{`@keyframes floatUp { 0%{transform:translateY(0) scale(1);opacity:1} 100%{transform:translateY(-70px) scale(1.5);opacity:0} }`}</style>
 
       <div className="space-y-2">
         <h3 className="font-semibold text-sm text-muted-foreground">שדרוגים</h3>
