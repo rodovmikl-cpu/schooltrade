@@ -88,26 +88,31 @@ export const IdleClickerGame = ({ userCode, userName }: Props) => {
   };
 
   return (
-    <Card className="p-4 space-y-4" dir="rtl">
+    <Card className="p-4 space-y-4 bg-gradient-to-b from-amber-50/40 to-transparent dark:from-amber-950/20" dir="rtl">
       <div className="text-center">
-        <div className="text-3xl font-bold">🍪 {Math.floor(coins).toLocaleString()}</div>
-        <div className="text-xs text-muted-foreground">+{clickPower}/לחיצה · +{autoPower}/שנייה</div>
+        <div className="text-4xl font-extrabold bg-gradient-to-br from-amber-500 to-orange-600 bg-clip-text text-transparent drop-shadow-sm">
+          🍪 {Math.floor(coins).toLocaleString()}
+        </div>
+        <div className="text-xs text-muted-foreground mt-1">+{clickPower}/לחיצה · +{autoPower.toLocaleString()}/שנייה</div>
       </div>
       <div className="flex justify-center">
-        <button
-          onClick={click}
-          className="relative w-40 h-40 rounded-full bg-gradient-to-br from-amber-400 to-orange-600 text-7xl shadow-2xl active:scale-95 transition-transform select-none touch-none"
-        >
-          🍪
-          {pop.map(p => (
-            <span key={p.id} className="absolute font-bold text-amber-100 text-xl pointer-events-none animate-fade-out"
-              style={{ left: p.x, top: p.y, animation: "floatUp 0.8s ease-out forwards" }}>
-              +{p.v}
-            </span>
-          ))}
-        </button>
+        <div className="relative">
+          <div className="absolute inset-0 rounded-full bg-amber-400/30 blur-2xl animate-pulse" />
+          <button
+            onClick={click}
+            className="relative w-44 h-44 rounded-full bg-gradient-to-br from-amber-300 via-amber-500 to-orange-700 text-7xl shadow-[0_10px_40px_-5px_rgba(245,158,11,0.6)] active:scale-90 transition-transform select-none touch-none ring-4 ring-amber-200/50 hover:ring-amber-300"
+          >
+            <span className="drop-shadow-lg">🍪</span>
+            {pop.map(p => (
+              <span key={p.id} className="absolute font-extrabold text-white text-2xl pointer-events-none drop-shadow-lg"
+                style={{ left: p.x, top: p.y, animation: "floatUp 0.9s ease-out forwards" }}>
+                +{p.v}
+              </span>
+            ))}
+          </button>
+        </div>
       </div>
-      <style>{`@keyframes floatUp { 0%{transform:translateY(0);opacity:1} 100%{transform:translateY(-50px);opacity:0} }`}</style>
+      <style>{`@keyframes floatUp { 0%{transform:translate(-50%,-50%) scale(1);opacity:1} 100%{transform:translate(-50%,-120%) scale(1.4);opacity:0} }`}</style>
 
       <div className="space-y-2">
         <h3 className="font-semibold text-sm text-muted-foreground">שדרוגים</h3>
