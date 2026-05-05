@@ -12,12 +12,14 @@ const SIZE = 4;
 
 const empty = (): Grid => Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
 
+const cloneG = (g: Grid): Grid => g.map(r => r.slice());
+
 const addRandom = (g: Grid): Grid => {
   const empties: [number, number][] = [];
   g.forEach((row, i) => row.forEach((v, j) => { if (v === 0) empties.push([i, j]); }));
   if (!empties.length) return g;
   const [i, j] = empties[Math.floor(Math.random() * empties.length)];
-  const ng = g.map(r => r.slice());
+  const ng = cloneG(g);
   ng[i][j] = Math.random() < 0.9 ? 2 : 4;
   return ng;
 };
@@ -35,7 +37,7 @@ const slideRow = (row: number[]): { row: number[]; gained: number } => {
 
 const move = (g: Grid, dir: "L" | "R" | "U" | "D"): { grid: Grid; gained: number; moved: boolean } => {
   let gained = 0;
-  let ng = g.map(r => r.slice());
+  let ng = cloneG(g);
   const transpose = (m: Grid) => m[0].map((_, c) => m.map(r => r[c]));
   if (dir === "U") ng = transpose(ng);
   if (dir === "D") ng = transpose(ng).map(r => r.reverse());
@@ -53,54 +55,73 @@ const isOver = (g: Grid): boolean => {
   return true;
 };
 
-const colorFor = (v: number) => {
-  const map: Record<number, string> = {
-    0: "bg-muted/30",
-    2: "bg-amber-100 text-amber-900",
-    4: "bg-amber-200 text-amber-900",
-    8: "bg-orange-300 text-white",
-    16: "bg-orange-400 text-white",
-    32: "bg-orange-500 text-white",
-    64: "bg-red-500 text-white",
-    128: "bg-yellow-400 text-white",
-    256: "bg-yellow-500 text-white",
-    512: "bg-yellow-600 text-white",
-    1024: "bg-emerald-500 text-white",
-    2048: "bg-emerald-600 text-white",
+const has2048 = (g: Grid) => g.some(r => r.some(v => v >= 2048));
+
+const styleFor = (v: number): { bg: string; fg: string; size: string } => {
+  const map: Record<number, { bg: string; fg: string }> = {
+    0:    { bg: "rgba(238,228,218,0.25)", fg: "#776e65" },
+    2:    { bg: "#eee4da", fg: "#776e65" },
+    4:    { bg: "#ede0c8", fg: "#776e65" },
+    8:    { bg: "#f2b179", fg: "#fff" },
+    16:   { bg: "#f59563", fg: "#fff" },
+    32:   { bg: "#f67c5f", fg: "#fff" },
+    64:   { bg: "#f65e3b", fg: "#fff" },
+    128:  { bg: "#edcf72", fg: "#fff" },
+    256:  { bg: "#edcc61", fg: "#fff" },
+    512:  { bg: "#edc850", fg: "#fff" },
+    1024: { bg: "#edc53f", fg: "#fff" },
+    2048: { bg: "#edc22e", fg: "#fff" },
   };
-  return map[v] || "bg-purple-700 text-white";
+  const s = map[v] || { bg: "#3c3a32", fg: "#fff" };
+  const size = v >= 1024 ? "text-base sm:text-xl" : v >= 128 ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl";
+  return { ...s, size };
 };
 
 export const Puzzle2048Game = ({ userCode, userName }: Props) => {
   const [grid, setGrid] = useState<Grid>(() => addRandom(addRandom(empty())));
+  const [prev, setPrev] = useState<{ grid: Grid; score: number } | null>(null);
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(() => parseInt(localStorage.getItem("arcade-best-puzzle2048") || "0") || 0);
   const [over, setOver] = useState(false);
+  const [won, setWon] = useState(false);
+  const [popKey, setPopKey] = useState(0);
   const submittedRef = useRef(0);
 
-  const reset = () => { setGrid(addRandom(addRandom(empty()))); setScore(0); setOver(false); submittedRef.current = 0; };
+  const reset = () => {
+    setGrid(addRandom(addRandom(empty())));
+    setScore(0); setOver(false); setWon(false); setPrev(null);
+    submittedRef.current = 0;
+  };
+
+  const undo = () => {
+    if (!prev) return;
+    setGrid(prev.grid);
+    setScore(prev.score);
+    setOver(false);
+    setPrev(null);
+    playSound("click");
+  };
 
   const apply = useCallback((dir: "L"|"R"|"U"|"D") => {
     if (over) return;
     setGrid(g => {
       const { grid: ng, gained, moved } = move(g, dir);
       if (!moved) return g;
+      setPrev({ grid: g, score });
       const withRand = addRandom(ng);
       setScore(s => {
         const ns = s + gained;
-        if (ns > best) { setBest(ns); }
+        if (ns > best) setBest(ns);
         return ns;
       });
+      setPopKey(k => k + 1);
       if (gained > 0) playSound("correct");
-      if (isOver(withRand)) {
-        setOver(true);
-        playSound("error");
-      }
+      if (!won && has2048(withRand)) { setWon(true); playSound("success"); }
+      if (isOver(withRand)) { setOver(true); playSound("error"); }
       return withRand;
     });
-  }, [over, best]);
+  }, [over, best, score, won]);
 
-  // submit on game over or when reaching milestones
   useEffect(() => {
     if (over && score > 0 && score > submittedRef.current) {
       setArcadeBest("puzzle2048", score);
@@ -115,6 +136,7 @@ export const Puzzle2048Game = ({ userCode, userName }: Props) => {
       else if (e.key === "ArrowRight") { e.preventDefault(); apply("R"); }
       else if (e.key === "ArrowUp") { e.preventDefault(); apply("U"); }
       else if (e.key === "ArrowDown") { e.preventDefault(); apply("D"); }
+      else if (e.key === "z" || e.key === "Z") undo();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -132,35 +154,61 @@ export const Puzzle2048Game = ({ userCode, userName }: Props) => {
 
   return (
     <Card className="p-4 space-y-4" dir="rtl">
-      <div className="flex justify-between items-center">
-        <div className="text-sm">ציון: <b>{score}</b></div>
-        <div className="text-sm">שיא: <b>{best}</b></div>
-        <Button size="sm" variant="outline" onClick={reset}>🔁 משחק חדש</Button>
-      </div>
-      <div
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-        className="bg-muted/40 rounded-xl p-2 grid grid-cols-4 gap-2 touch-none select-none aspect-square max-w-md mx-auto w-full"
-      >
-        {grid.flatMap((row, i) => row.map((v, j) => (
-          <div key={`${i}-${j}`}
-            className={`flex items-center justify-center rounded-lg font-bold text-xl sm:text-2xl transition-all duration-150 ${colorFor(v)}`}>
-            {v !== 0 ? v : ""}
+      <div className="flex justify-between items-center gap-2 flex-wrap">
+        <div className="flex gap-2">
+          <div className="bg-muted rounded-lg px-3 py-1 text-center">
+            <div className="text-[10px] text-muted-foreground">ציון</div>
+            <div className="font-bold">{score}</div>
           </div>
-        )))}
-      </div>
-      {over && (
-        <div className="text-center text-destructive font-bold animate-fade-in">
-          🎯 נגמר המשחק! ציון סופי: {score}
+          <div className="bg-muted rounded-lg px-3 py-1 text-center">
+            <div className="text-[10px] text-muted-foreground">שיא</div>
+            <div className="font-bold">{best}</div>
+          </div>
         </div>
-      )}
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={undo} disabled={!prev}>↩️ בטל</Button>
+          <Button size="sm" variant="outline" onClick={reset}>🔁 חדש</Button>
+        </div>
+      </div>
+      <div className="relative max-w-md mx-auto w-full">
+        <div
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+          style={{ background: "#bbada0" }}
+          className="rounded-xl p-2 grid grid-cols-4 gap-2 touch-none select-none aspect-square"
+        >
+          {grid.flatMap((row, i) => row.map((v, j) => {
+            const st = styleFor(v);
+            return (
+              <div key={`${i}-${j}-${popKey}`}
+                style={{ background: st.bg, color: st.fg }}
+                className={`flex items-center justify-center rounded-lg font-bold ${st.size} shadow-sm transition-all duration-150 ${v !== 0 ? "animate-scale-in" : ""}`}>
+                {v !== 0 ? v : ""}
+              </div>
+            );
+          }))}
+        </div>
+        {(over || won) && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-xl animate-fade-in">
+            <div className="bg-card p-5 rounded-2xl text-center shadow-2xl border-2 border-primary/40">
+              <div className="text-3xl mb-1">{won && !over ? "🏆 ניצחת!" : "🎯 נגמר"}</div>
+              <div>ציון: <b>{score}</b></div>
+              <div className="text-xs text-muted-foreground">שיא: {best}</div>
+              <div className="flex gap-2 mt-3">
+                {won && !over && <Button variant="outline" onClick={() => setWon(false)}>המשך לשחק</Button>}
+                <Button onClick={reset}>🔁 משחק חדש</Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
       <div className="grid grid-cols-3 gap-1 sm:hidden max-w-[180px] mx-auto">
         <div></div><Button size="sm" onClick={() => apply("U")}>▲</Button><div></div>
         <Button size="sm" onClick={() => apply("L")}>◀</Button>
         <Button size="sm" onClick={() => apply("D")}>▼</Button>
         <Button size="sm" onClick={() => apply("R")}>▶</Button>
       </div>
-      <p className="text-xs text-muted-foreground text-center">החלק או השתמש בחיצים. שלב מספרים זהים כדי להגיע ל-2048!</p>
+      <p className="text-xs text-muted-foreground text-center">החלק או חיצים • Z לביטול • שלב מספרים זהים להגיע ל-2048!</p>
     </Card>
   );
 };
