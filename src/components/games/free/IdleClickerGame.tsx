@@ -121,12 +121,15 @@ export const IdleClickerGame = ({ userCode, userName }: Props) => {
           const can = coins >= c;
           return (
             <button key={u.id} disabled={!can} onClick={() => buy(u.id)}
-              className={`w-full text-right p-3 rounded-lg border-2 flex justify-between items-center transition-all ${can ? "border-primary/40 hover:bg-primary/10" : "border-border opacity-60"}`}>
-              <div>
-                <div className="font-bold">{u.emoji} {u.name} <span className="text-xs text-muted-foreground">לבל {u.level}</span></div>
-                <div className="text-xs text-muted-foreground">{u.type === "click" ? `+${u.basePower} ללחיצה` : `+${u.basePower}/שנייה`}</div>
+              className={`w-full text-right p-3 rounded-xl border-2 flex justify-between items-center transition-all ${can ? "border-primary/50 bg-primary/5 hover:bg-primary/15 hover:scale-[1.01] shadow-sm" : "border-border opacity-60 bg-muted/30"}`}>
+              <div className="flex items-center gap-3">
+                <div className="text-3xl">{u.emoji}</div>
+                <div>
+                  <div className="font-bold flex items-center gap-2">{u.name}<span className="text-xs px-1.5 py-0.5 bg-primary/20 rounded-md text-primary">לבל {u.level}</span></div>
+                  <div className="text-xs text-muted-foreground">{u.type === "click" ? `+${u.basePower} ללחיצה` : `+${u.basePower * Math.max(1, u.level)}/שנייה`}</div>
+                </div>
               </div>
-              <div className="text-sm font-bold">{c.toLocaleString()} 🍪</div>
+              <div className={`text-sm font-bold ${can ? "text-primary" : ""}`}>{c.toLocaleString()} 🍪</div>
             </button>
           );
         })}
