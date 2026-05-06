@@ -154,20 +154,24 @@ export const Puzzle2048Game = ({ userCode, userName }: Props) => {
 
   return (
     <Card className="p-4 space-y-4" dir="rtl">
+      <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-center text-sm">
+        <div className="font-bold mb-1">כיצד לשחק:</div>
+        <div className="text-muted-foreground">החלק את הלוח כדי לאחד מספרים זהים ולהגיע ל-2048</div>
+      </div>
       <div className="flex justify-between items-center gap-2 flex-wrap">
         <div className="flex gap-2">
-          <div className="bg-muted rounded-lg px-3 py-1 text-center">
-            <div className="text-[10px] text-muted-foreground">ציון</div>
+          <div className="bg-muted rounded-lg px-3 py-1 text-center min-w-16">
+            <div className="text-[10px] text-muted-foreground">ניקוד</div>
             <div className="font-bold">{score}</div>
           </div>
-          <div className="bg-muted rounded-lg px-3 py-1 text-center">
+          <div className="bg-muted rounded-lg px-3 py-1 text-center min-w-16">
             <div className="text-[10px] text-muted-foreground">שיא</div>
             <div className="font-bold">{best}</div>
           </div>
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={undo} disabled={!prev}>↩️ בטל</Button>
-          <Button size="sm" variant="outline" onClick={reset}>🔁 חדש</Button>
+          <Button size="sm" variant="outline" onClick={reset}>🔁 התחל מחדש</Button>
         </div>
       </div>
       <div className="relative max-w-md mx-auto w-full">
