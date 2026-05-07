@@ -1,4 +1,7 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, Suspense } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Environment, Cylinder, RoundedBox, Sparkles, Stars } from "@react-three/drei";
+import * as THREE from "three";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { submitScore } from "@/components/games/Leaderboard";
@@ -7,342 +10,504 @@ import { playSound } from "@/lib/sounds";
 
 interface Props { userCode: string; userName: string; }
 
-// Pseudo-3D 3-lane endless runner (Subway Surfers style)
-const W = 480, H = 320;
-const HORIZON = 90;       // vanishing point Y
-const GROUND_Y = H - 20;  // bottom of track
-const LANE_X = [-1, 0, 1];// left, center, right
-const ROAD_W_TOP = 60;
-const ROAD_W_BOTTOM = 440;
+// === Game Constants ===
+const LANES = [-2.2, 0, 2.2];
+const PLAYER_Z = 4;          // player stays here, world moves toward camera
+const SPAWN_Z = -90;
+const DESPAWN_Z = 8;
+const GRAVITY = -38;
+const JUMP_V = 14;
+const SLIDE_TIME = 0.55;
+const LANE_LERP = 14;
 
-// Project a world point (laneOffset in [-1,1], depth z in [0,1] where 0=near, 1=far) to screen
-const project = (lane: number, z: number) => {
-  // perspective scale: near=1, far ~ 0.18
-  const scale = 1 - z * 0.82;
-  const roadW = ROAD_W_TOP + (ROAD_W_BOTTOM - ROAD_W_TOP) * (1 - z);
-  const cx = W / 2;
-  const x = cx + lane * (roadW / 2) * 0.66;
-  const y = HORIZON + (GROUND_Y - HORIZON) * (1 - z);
-  return { x, y, scale };
+type ObstacleKind = "barrier" | "train" | "lowbar";
+interface Obstacle { id: number; lane: number; z: number; kind: ObstacleKind; }
+interface Coin { id: number; lane: number; z: number; got: boolean; }
+
+interface SharedState {
+  lane: number;
+  laneX: number;
+  y: number;
+  vy: number;
+  sliding: number;
+  speed: number;
+  distance: number;
+  coins: number;
+  alive: boolean;
+  paused: boolean;
+  obstacles: Obstacle[];
+  coinsArr: Coin[];
+  spawnTimer: number;
+  coinTimer: number;
+  nextId: number;
+  onCrash?: () => void;
+  onCoin?: () => void;
+}
+
+// === Player Character (stylized capsule character) ===
+const Player = ({ state }: { state: React.MutableRefObject<SharedState> }) => {
+  const group = useRef<THREE.Group>(null!);
+  const leftLeg = useRef<THREE.Mesh>(null!);
+  const rightLeg = useRef<THREE.Mesh>(null!);
+  const leftArm = useRef<THREE.Mesh>(null!);
+  const rightArm = useRef<THREE.Mesh>(null!);
+  const body = useRef<THREE.Group>(null!);
+
+  useFrame((_, dt) => {
+    const s = state.current;
+    if (!group.current) return;
+    group.current.position.x = s.laneX;
+    group.current.position.y = s.y;
+    group.current.position.z = PLAYER_Z;
+
+    const sliding = s.sliding > 0;
+    const targetScaleY = sliding ? 0.55 : 1;
+    body.current.scale.y += (targetScaleY - body.current.scale.y) * Math.min(1, dt * 14);
+    body.current.position.y = sliding ? -0.35 : 0;
+
+    const t = performance.now() * 0.012 * (s.speed / 14);
+    const swing = sliding || s.y > 0.05 ? 0 : Math.sin(t) * 0.9;
+    leftLeg.current.rotation.x = swing;
+    rightLeg.current.rotation.x = -swing;
+    leftArm.current.rotation.x = -swing * 0.7;
+    rightArm.current.rotation.x = swing * 0.7;
+
+    // tilt during lane change
+    const dx = (s.lane === 0 ? -2.2 : s.lane === 1 ? 0 : 2.2) - s.laneX;
+    group.current.rotation.z = THREE.MathUtils.clamp(-dx * 0.12, -0.25, 0.25);
+  });
+
+  return (
+    <group ref={group}>
+      <group ref={body}>
+        {/* torso */}
+        <RoundedBox args={[0.85, 1.1, 0.55]} radius={0.18} smoothness={4} position={[0, 0.55, 0]} castShadow>
+          <meshStandardMaterial color="#ef4444" roughness={0.5} metalness={0.1} />
+        </RoundedBox>
+        {/* hood/backpack */}
+        <RoundedBox args={[0.7, 0.55, 0.3]} radius={0.12} smoothness={4} position={[0, 0.7, -0.35]} castShadow>
+          <meshStandardMaterial color="#7f1d1d" roughness={0.7} />
+        </RoundedBox>
+        {/* head */}
+        <mesh position={[0, 1.45, 0.05]} castShadow>
+          <sphereGeometry args={[0.32, 24, 24]} />
+          <meshStandardMaterial color="#fcd9b6" roughness={0.6} />
+        </mesh>
+        {/* cap */}
+        <mesh position={[0, 1.65, 0.02]} castShadow>
+          <sphereGeometry args={[0.34, 24, 24, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshStandardMaterial color="#fde047" roughness={0.4} metalness={0.2} />
+        </mesh>
+        <RoundedBox args={[0.5, 0.06, 0.18]} radius={0.03} smoothness={3} position={[0, 1.55, 0.28]} castShadow>
+          <meshStandardMaterial color="#fde047" />
+        </RoundedBox>
+        {/* arms */}
+        <mesh ref={leftArm} position={[-0.55, 0.8, 0]} castShadow>
+          <capsuleGeometry args={[0.13, 0.55, 6, 12]} />
+          <meshStandardMaterial color="#1d4ed8" roughness={0.6} />
+        </mesh>
+        <mesh ref={rightArm} position={[0.55, 0.8, 0]} castShadow>
+          <capsuleGeometry args={[0.13, 0.55, 6, 12]} />
+          <meshStandardMaterial color="#1d4ed8" roughness={0.6} />
+        </mesh>
+        {/* legs */}
+        <mesh ref={leftLeg} position={[-0.22, -0.1, 0]} castShadow>
+          <capsuleGeometry args={[0.16, 0.6, 6, 12]} />
+          <meshStandardMaterial color="#0f172a" roughness={0.7} />
+        </mesh>
+        <mesh ref={rightLeg} position={[0.22, -0.1, 0]} castShadow>
+          <capsuleGeometry args={[0.16, 0.6, 6, 12]} />
+          <meshStandardMaterial color="#0f172a" roughness={0.7} />
+        </mesh>
+        {/* shoes */}
+        <mesh position={[-0.22, -0.5, 0.1]} castShadow>
+          <boxGeometry args={[0.32, 0.16, 0.45]} />
+          <meshStandardMaterial color="#fef3c7" />
+        </mesh>
+        <mesh position={[0.22, -0.5, 0.1]} castShadow>
+          <boxGeometry args={[0.32, 0.16, 0.45]} />
+          <meshStandardMaterial color="#fef3c7" />
+        </mesh>
+      </group>
+      {/* shadow disk */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.99, 0]}>
+        <circleGeometry args={[0.7, 24]} />
+        <meshBasicMaterial color="#000" transparent opacity={0.35} />
+      </mesh>
+    </group>
+  );
 };
 
-interface Obstacle { lane: number; z: number; type: "barrier" | "train"; }
-interface Coin { lane: number; z: number; got: boolean; }
-interface Particle { x: number; y: number; vx: number; vy: number; life: number; color: string; }
+// === Track / Rails ===
+const Track = ({ offset }: { offset: React.MutableRefObject<number> }) => {
+  const ties = useRef<THREE.InstancedMesh>(null!);
+  const tmp = new THREE.Object3D();
+  const COUNT = 60;
+  useFrame(() => {
+    const o = offset.current;
+    for (let i = 0; i < COUNT; i++) {
+      const z = ((i * 2 + o) % (COUNT * 2)) - COUNT * 2 + 8;
+      tmp.position.set(0, -0.98, z);
+      tmp.rotation.set(0, 0, 0);
+      tmp.updateMatrix();
+      ties.current.setMatrixAt(i, tmp.matrix);
+    }
+    ties.current.instanceMatrix.needsUpdate = true;
+  });
+  return (
+    <group>
+      {/* ground */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]} receiveShadow>
+        <planeGeometry args={[200, 400]} />
+        <meshStandardMaterial color="#3a3f4b" roughness={1} />
+      </mesh>
+      {/* track base */}
+      <mesh position={[0, -0.99, -50]} receiveShadow>
+        <boxGeometry args={[7.2, 0.02, 200]} />
+        <meshStandardMaterial color="#5b4636" roughness={1} />
+      </mesh>
+      {/* lane dividers (rails) */}
+      {[-1.1, 1.1].map((x, i) => (
+        <mesh key={i} position={[x, -0.92, -50]} castShadow>
+          <boxGeometry args={[0.12, 0.06, 200]} />
+          <meshStandardMaterial color="#cbd5e1" metalness={0.85} roughness={0.25} />
+        </mesh>
+      ))}
+      {/* outer rails */}
+      {[-3.3, 3.3].map((x, i) => (
+        <mesh key={i} position={[x, -0.92, -50]} castShadow>
+          <boxGeometry args={[0.12, 0.06, 200]} />
+          <meshStandardMaterial color="#cbd5e1" metalness={0.85} roughness={0.25} />
+        </mesh>
+      ))}
+      {/* wooden ties (instanced) */}
+      <instancedMesh ref={ties} args={[undefined, undefined, COUNT]}>
+        <boxGeometry args={[6.6, 0.08, 0.6]} />
+        <meshStandardMaterial color="#3b2a1a" roughness={1} />
+      </instancedMesh>
+    </group>
+  );
+};
+
+// === Scenery (buildings, lamps) ===
+const Scenery = ({ offset }: { offset: React.MutableRefObject<number> }) => {
+  const left = useRef<THREE.Group>(null!);
+  const right = useRef<THREE.Group>(null!);
+  useFrame(() => {
+    const o = offset.current;
+    [left, right].forEach((g) => {
+      g.current.children.forEach((c, i) => {
+        const base = i * 14;
+        let z = ((base + o) % 140) - 100;
+        c.position.z = z;
+      });
+    });
+  });
+  const buildings = Array.from({ length: 10 });
+  return (
+    <>
+      <group ref={left} position={[-7, 0, 0]}>
+        {buildings.map((_, i) => (
+          <group key={i}>
+            <RoundedBox args={[3, 4 + (i % 3) * 1.5, 3]} radius={0.1} smoothness={2} position={[0, 1 + (i % 3) * 0.75, 0]} castShadow receiveShadow>
+              <meshStandardMaterial color={i % 2 ? "#475569" : "#64748b"} roughness={0.85} />
+            </RoundedBox>
+            {/* windows */}
+            {Array.from({ length: 6 }).map((__, w) => (
+              <mesh key={w} position={[1.51, 0.6 + w * 0.55, 0]}>
+                <planeGeometry args={[0.3, 0.3]} />
+                <meshStandardMaterial color="#fde68a" emissive="#fde68a" emissiveIntensity={0.6} />
+              </mesh>
+            ))}
+            {/* lamp */}
+            <mesh position={[3.5, 1.5, 0]} castShadow>
+              <cylinderGeometry args={[0.05, 0.05, 3]} />
+              <meshStandardMaterial color="#222" />
+            </mesh>
+            <pointLight position={[3.5, 3, 0]} intensity={0.6} distance={6} color="#fde68a" />
+          </group>
+        ))}
+      </group>
+      <group ref={right} position={[7, 0, 0]}>
+        {buildings.map((_, i) => (
+          <group key={i}>
+            <RoundedBox args={[3, 4 + ((i + 1) % 3) * 1.5, 3]} radius={0.1} smoothness={2} position={[0, 1 + ((i + 1) % 3) * 0.75, 0]} castShadow receiveShadow>
+              <meshStandardMaterial color={i % 2 ? "#52525b" : "#71717a"} roughness={0.85} />
+            </RoundedBox>
+            {Array.from({ length: 6 }).map((__, w) => (
+              <mesh key={w} position={[-1.51, 0.6 + w * 0.55, 0]}>
+                <planeGeometry args={[0.3, 0.3]} />
+                <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.5} />
+              </mesh>
+            ))}
+            <mesh position={[-3.5, 1.5, 0]} castShadow>
+              <cylinderGeometry args={[0.05, 0.05, 3]} />
+              <meshStandardMaterial color="#222" />
+            </mesh>
+            <pointLight position={[-3.5, 3, 0]} intensity={0.6} distance={6} color="#fde68a" />
+          </group>
+        ))}
+      </group>
+    </>
+  );
+};
+
+// === Obstacles & coins rendering ===
+const ObstaclesAndCoins = ({ state }: { state: React.MutableRefObject<SharedState> }) => {
+  const group = useRef<THREE.Group>(null!);
+  const coinGroup = useRef<THREE.Group>(null!);
+  const [, force] = useState(0);
+  useFrame((_, dt) => {
+    const s = state.current;
+    if (s.paused || !s.alive) return;
+    // spawn obstacles
+    s.spawnTimer -= dt;
+    if (s.spawnTimer <= 0) {
+      s.spawnTimer = Math.max(0.55, 1.4 - s.distance / 800);
+      const lane = Math.floor(Math.random() * 3);
+      const r = Math.random();
+      const kind: ObstacleKind = r < 0.3 ? "train" : r < 0.65 ? "barrier" : "lowbar";
+      s.obstacles.push({ id: s.nextId++, lane, z: SPAWN_Z, kind });
+    }
+    // spawn coin trains
+    s.coinTimer -= dt;
+    if (s.coinTimer <= 0) {
+      s.coinTimer = 1.0;
+      const lane = Math.floor(Math.random() * 3);
+      for (let i = 0; i < 5; i++) s.coinsArr.push({ id: s.nextId++, lane, z: SPAWN_Z - i * 2, got: false });
+    }
+    // move
+    s.obstacles.forEach((o) => (o.z += s.speed * dt));
+    s.coinsArr.forEach((c) => (c.z += s.speed * dt));
+    s.obstacles = s.obstacles.filter((o) => o.z < DESPAWN_Z);
+    s.coinsArr = s.coinsArr.filter((c) => c.z < DESPAWN_Z && !c.got);
+
+    // collision
+    const playerLane = Math.round((s.laneX + 2.2) / 2.2);
+    for (const o of s.obstacles) {
+      if (o.lane !== playerLane) continue;
+      if (Math.abs(o.z - PLAYER_Z) < 1.0) {
+        const isJumping = s.y > 0.6;
+        const isSliding = s.sliding > 0;
+        if (o.kind === "barrier" && (isJumping || isSliding)) continue;
+        if (o.kind === "lowbar" && isSliding) continue;
+        // train: any tall — only avoidable via lane change
+        if (o.kind === "train") { /* always hit */ }
+        if (o.kind === "lowbar" && isJumping) { /* hits head */ }
+        s.alive = false;
+        s.onCrash?.();
+      }
+    }
+    for (const c of s.coinsArr) {
+      if (c.got) continue;
+      if (c.lane !== playerLane) continue;
+      if (Math.abs(c.z - PLAYER_Z) < 0.9 && s.y < 1.6) {
+        c.got = true; s.coins++; s.onCoin?.();
+      }
+    }
+    // animate coins spin
+    coinGroup.current?.children.forEach((m) => { (m as THREE.Mesh).rotation.y += dt * 6; });
+    force((n) => (n + 1) % 1000000);
+  });
+
+  const s = state.current;
+  return (
+    <>
+      <group ref={group}>
+        {s.obstacles.map((o) => {
+          const x = LANES[o.lane];
+          if (o.kind === "train") {
+            return (
+              <group key={o.id} position={[x, 0, o.z]}>
+                <RoundedBox args={[1.7, 2.4, 4.5]} radius={0.18} smoothness={3} position={[0, 0.2, 0]} castShadow>
+                  <meshStandardMaterial color="#dc2626" metalness={0.4} roughness={0.4} />
+                </RoundedBox>
+                <RoundedBox args={[1.5, 0.5, 4.2]} radius={0.1} smoothness={2} position={[0, 0.85, 0]}>
+                  <meshStandardMaterial color="#fde68a" emissive="#fde68a" emissiveIntensity={0.25} />
+                </RoundedBox>
+                <mesh position={[0, -0.5, 2.3]}>
+                  <planeGeometry args={[1.4, 0.4]} />
+                  <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={0.6} />
+                </mesh>
+              </group>
+            );
+          }
+          if (o.kind === "barrier") {
+            return (
+              <group key={o.id} position={[x, -0.5, o.z]}>
+                <RoundedBox args={[1.6, 0.9, 0.4]} radius={0.06} smoothness={2} castShadow>
+                  <meshStandardMaterial color="#f97316" roughness={0.5} />
+                </RoundedBox>
+                {[-0.4, 0, 0.4].map((dx, i) => (
+                  <mesh key={i} position={[dx, 0, 0.21]}>
+                    <planeGeometry args={[0.3, 0.6]} />
+                    <meshStandardMaterial color="#0f172a" />
+                  </mesh>
+                ))}
+              </group>
+            );
+          }
+          // lowbar — overhead barrier (slide under)
+          return (
+            <group key={o.id} position={[x, 1.2, o.z]}>
+              <RoundedBox args={[1.8, 0.35, 0.5]} radius={0.06} smoothness={2} castShadow>
+                <meshStandardMaterial color="#facc15" />
+              </RoundedBox>
+              {[-0.7, 0.7].map((dx, i) => (
+                <mesh key={i} position={[dx, -1, 0]}>
+                  <cylinderGeometry args={[0.07, 0.07, 2]} />
+                  <meshStandardMaterial color="#0f172a" />
+                </mesh>
+              ))}
+            </group>
+          );
+        })}
+      </group>
+      <group ref={coinGroup}>
+        {s.coinsArr.map((c) => (
+          <mesh key={c.id} position={[LANES[c.lane], 0.4, c.z]} castShadow>
+            <cylinderGeometry args={[0.32, 0.32, 0.08, 24]} />
+            <meshStandardMaterial color="#fde047" emissive="#facc15" emissiveIntensity={0.7} metalness={0.9} roughness={0.2} />
+          </mesh>
+        ))}
+      </group>
+    </>
+  );
+};
+
+// === Main game scene ===
+const GameScene = ({ state, trackOffset, onTick }: {
+  state: React.MutableRefObject<SharedState>;
+  trackOffset: React.MutableRefObject<number>;
+  onTick: () => void;
+}) => {
+  const { camera } = useThree();
+  useEffect(() => {
+    camera.position.set(0, 3.2, 9);
+    camera.lookAt(0, 1, 0);
+  }, [camera]);
+
+  useFrame((_, dt) => {
+    const s = state.current;
+    if (s.paused || !s.alive) return;
+    s.speed = Math.min(34, 14 + s.distance * 0.005);
+    s.distance += s.speed * dt;
+    trackOffset.current = (trackOffset.current + s.speed * dt) % (60 * 2);
+
+    // lane lerp
+    const targetX = LANES[s.lane];
+    s.laneX += (targetX - s.laneX) * Math.min(1, dt * LANE_LERP);
+
+    // jump physics
+    if (s.y > 0 || s.vy !== 0) {
+      s.vy += GRAVITY * dt;
+      s.y += s.vy * dt;
+      if (s.y < 0) { s.y = 0; s.vy = 0; }
+    }
+    if (s.sliding > 0) s.sliding -= dt;
+
+    // subtle camera bob
+    camera.position.x += (s.laneX * 0.25 - camera.position.x) * Math.min(1, dt * 6);
+    camera.position.y = 3.2 + Math.sin(performance.now() * 0.008) * 0.05;
+
+    onTick();
+  });
+
+  return (
+    <>
+      <color attach="background" args={["#0b1220"]} />
+      <fog attach="fog" args={["#0b1220", 25, 80]} />
+      <ambientLight intensity={0.55} />
+      <hemisphereLight args={["#a5d8ff", "#1e293b", 0.6]} />
+      <directionalLight
+        position={[8, 14, 6]}
+        intensity={1.1}
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+        shadow-camera-left={-15}
+        shadow-camera-right={15}
+        shadow-camera-top={15}
+        shadow-camera-bottom={-15}
+      />
+      <Stars radius={80} depth={30} count={1500} factor={3} fade speed={0.5} />
+      <Track offset={trackOffset} />
+      <Scenery offset={trackOffset} />
+      <Player state={state} />
+      <ObstaclesAndCoins state={state} />
+      <Sparkles count={40} scale={[14, 6, 30]} position={[0, 3, -10]} size={2} speed={0.3} color="#fde68a" />
+    </>
+  );
+};
 
 export const RunnerGame = ({ userCode, userName }: Props) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [score, setScore] = useState(0);
   const [coins, setCoins] = useState(0);
   const [best, setBest] = useState(() => parseInt(localStorage.getItem("arcade-best-runner") || "0") || 0);
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
   const [gameOver, setGameOver] = useState(false);
-  const pausedRef = useRef(false);
-  pausedRef.current = paused;
 
-  const stRef = useRef({
-    lane: 1,            // 0,1,2
-    laneT: 1,           // animated lane (-1..1 visually)
-    targetLane: 1,
-    jumpY: 0,           // 0 ground, negative = up
-    jumpV: 0,
-    sliding: 0,         // frames remaining
-    obstacles: [] as Obstacle[],
-    coins: [] as Coin[],
-    particles: [] as Particle[],
-    speed: 0.018,       // depth units/frame
-    frame: 0,
-    score: 0,
-    coinsCollected: 0,
-    alive: true,
-    roadOffset: 0,
+  const state = useRef<SharedState>({
+    lane: 1, laneX: 0, y: 0, vy: 0, sliding: 0,
+    speed: 14, distance: 0, coins: 0, alive: true, paused: false,
+    obstacles: [], coinsArr: [], spawnTimer: 1.2, coinTimer: 0.8, nextId: 1,
   });
+  const trackOffset = useRef(0);
 
-  const start = () => {
-    stRef.current = {
-      lane: 1, laneT: 1, targetLane: 1,
-      jumpY: 0, jumpV: 0, sliding: 0,
-      obstacles: [], coins: [], particles: [],
-      speed: 0.018, frame: 0, score: 0, coinsCollected: 0, alive: true, roadOffset: 0,
+  const start = useCallback(() => {
+    state.current = {
+      lane: 1, laneX: 0, y: 0, vy: 0, sliding: 0,
+      speed: 14, distance: 0, coins: 0, alive: true, paused: false,
+      obstacles: [], coinsArr: [], spawnTimer: 1.2, coinTimer: 0.8, nextId: 1,
+      onCrash: () => {
+        const s = state.current;
+        const finalScore = Math.floor(s.distance) + s.coins * 5;
+        setScore(finalScore);
+        setRunning(false); setGameOver(true);
+        setArcadeBest("runner", finalScore);
+        setBest((b) => Math.max(b, finalScore));
+        if (finalScore > 0) submitScore("runner", userCode, userName, finalScore);
+        playSound("error");
+      },
+      onCoin: () => playSound("correct"),
     };
-    setScore(0); setCoins(0); setGameOver(false); setRunning(true); setPaused(false);
-  };
-  const togglePause = () => { if (running && !gameOver) setPaused(p => !p); };
+    trackOffset.current = 0;
+    setScore(0); setCoins(0); setGameOver(false); setPaused(false); setRunning(true);
+  }, [userCode, userName]);
+
+  const onTick = useCallback(() => {
+    const s = state.current;
+    setScore(Math.floor(s.distance) + s.coins * 5);
+    setCoins(s.coins);
+  }, []);
 
   const moveLane = useCallback((dir: -1 | 1) => {
-    const s = stRef.current;
-    if (!s.alive || pausedRef.current) return;
-    const nl = Math.max(0, Math.min(2, s.targetLane + dir));
-    if (nl !== s.targetLane) { s.targetLane = nl; playSound("click"); }
+    const s = state.current;
+    if (!s.alive || s.paused) return;
+    const nl = Math.max(0, Math.min(2, s.lane + dir));
+    if (nl !== s.lane) { s.lane = nl; playSound("click"); }
   }, []);
-
   const jump = useCallback(() => {
-    const s = stRef.current;
-    if (!s.alive || pausedRef.current) return;
-    if (s.jumpY === 0 && s.sliding === 0) {
-      s.jumpV = -10; playSound("click");
-    }
+    const s = state.current;
+    if (!s.alive || s.paused) return;
+    if (s.y <= 0.01 && s.sliding <= 0) { s.vy = JUMP_V; playSound("click"); }
   }, []);
-
   const slide = useCallback(() => {
-    const s = stRef.current;
-    if (!s.alive || pausedRef.current) return;
-    if (s.jumpY === 0 && s.sliding === 0) {
-      s.sliding = 35; playSound("click");
-    }
+    const s = state.current;
+    if (!s.alive || s.paused) return;
+    if (s.y <= 0.01 && s.sliding <= 0) { s.sliding = SLIDE_TIME; playSound("click"); }
   }, []);
+  const togglePause = useCallback(() => {
+    if (!running || gameOver) return;
+    state.current.paused = !state.current.paused;
+    setPaused(state.current.paused);
+  }, [running, gameOver]);
 
-  useEffect(() => {
-    if (!running) return;
-    const ctx = canvasRef.current!.getContext("2d")!;
-    let raf = 0;
-
-    const drawSky = () => {
-      const g = ctx.createLinearGradient(0, 0, 0, HORIZON);
-      g.addColorStop(0, "#1e3a8a"); g.addColorStop(1, "#fb923c");
-      ctx.fillStyle = g; ctx.fillRect(0, 0, W, HORIZON);
-      // distant city
-      ctx.fillStyle = "#0f172a";
-      for (let i = 0; i < 14; i++) {
-        const bx = i * 36, bh = 18 + ((i * 53) % 35);
-        ctx.fillRect(bx, HORIZON - bh, 30, bh);
-      }
-    };
-
-    const drawRoad = (offset: number) => {
-      // ground
-      ctx.fillStyle = "#1f2937"; ctx.fillRect(0, HORIZON, W, H - HORIZON);
-      // road trapezoid
-      ctx.fillStyle = "#374151";
-      ctx.beginPath();
-      ctx.moveTo(W/2 - ROAD_W_TOP/2, HORIZON);
-      ctx.lineTo(W/2 + ROAD_W_TOP/2, HORIZON);
-      ctx.lineTo(W/2 + ROAD_W_BOTTOM/2, GROUND_Y);
-      ctx.lineTo(W/2 - ROAD_W_BOTTOM/2, GROUND_Y);
-      ctx.closePath(); ctx.fill();
-
-      // lane lines
-      ctx.strokeStyle = "#6b7280"; ctx.lineWidth = 2;
-      for (const sgn of [-1, 1]) {
-        ctx.beginPath();
-        ctx.moveTo(W/2 + sgn * ROAD_W_TOP/6, HORIZON);
-        ctx.lineTo(W/2 + sgn * ROAD_W_BOTTOM/6, GROUND_Y);
-        ctx.stroke();
-      }
-      // dashed center stripes (perspective)
-      for (let i = 0; i < 12; i++) {
-        const z = ((i / 12) + offset) % 1;
-        const p1 = project(0, z);
-        const p2 = project(0, Math.min(1, z + 0.04));
-        ctx.strokeStyle = "rgba(250,204,21,0.85)";
-        ctx.lineWidth = Math.max(1, 4 * (1 - z));
-        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
-      }
-      // rails on sides (subway feel)
-      ctx.strokeStyle = "#94a3b8";
-      for (const sgn of [-1, 1]) {
-        ctx.beginPath();
-        ctx.moveTo(W/2 + sgn * ROAD_W_TOP/2, HORIZON);
-        ctx.lineTo(W/2 + sgn * ROAD_W_BOTTOM/2, GROUND_Y);
-        ctx.lineWidth = 2; ctx.stroke();
-      }
-    };
-
-    const drawObstacle = (o: Obstacle) => {
-      const p = project(LANE_X[o.lane], o.z);
-      if (o.type === "barrier") {
-        const w = 38 * p.scale, h = 26 * p.scale;
-        ctx.fillStyle = "#dc2626";
-        ctx.fillRect(p.x - w/2, p.y - h, w, h);
-        ctx.fillStyle = "#fff";
-        for (let i = 0; i < 3; i++) {
-          ctx.fillRect(p.x - w/2 + i*(w/3) + 2, p.y - h + 4, w/3 - 4, 4);
-        }
-      } else {
-        // train: tall block spanning some depth
-        const w = 46 * p.scale, h = 70 * p.scale;
-        const grad = ctx.createLinearGradient(p.x - w/2, 0, p.x + w/2, 0);
-        grad.addColorStop(0, "#1d4ed8"); grad.addColorStop(0.5, "#3b82f6"); grad.addColorStop(1, "#1d4ed8");
-        ctx.fillStyle = grad;
-        ctx.fillRect(p.x - w/2, p.y - h, w, h);
-        ctx.fillStyle = "#fde68a";
-        ctx.fillRect(p.x - w/2 + 4, p.y - h + 6, w - 8, h * 0.18);
-        ctx.fillStyle = "#0f172a";
-        ctx.fillRect(p.x - w/2, p.y - 4, w, 4);
-      }
-    };
-
-    const drawCoin = (c: Coin, frame: number) => {
-      const p = project(LANE_X[c.lane], c.z);
-      const r = 7 * p.scale;
-      const w = Math.abs(Math.cos(frame * 0.2 + c.z * 5)) * r + 2;
-      const grad = ctx.createLinearGradient(p.x - w, 0, p.x + w, 0);
-      grad.addColorStop(0, "#b45309"); grad.addColorStop(0.5, "#fde047"); grad.addColorStop(1, "#b45309");
-      ctx.fillStyle = grad;
-      ctx.beginPath(); ctx.ellipse(p.x, p.y - 22 * p.scale, w, r, 0, 0, Math.PI * 2); ctx.fill();
-    };
-
-    const drawPlayer = (s: typeof stRef.current) => {
-      // player always near (z=0.02)
-      const p = project(s.laneT - 1, 0.02);
-      const baseY = p.y;
-      const isSliding = s.sliding > 0;
-      const w = 28, hFull = 44, hSlide = 22;
-      const h = isSliding ? hSlide : hFull;
-      const y = baseY + s.jumpY;
-      // shadow
-      const shadowScale = Math.max(0.4, 1 - (-s.jumpY) / 80);
-      ctx.fillStyle = `rgba(0,0,0,${0.4 * shadowScale})`;
-      ctx.beginPath(); ctx.ellipse(p.x, baseY, 18 * shadowScale, 4 * shadowScale, 0, 0, Math.PI*2); ctx.fill();
-      // body
-      const grad = ctx.createLinearGradient(p.x, y - h, p.x, y);
-      grad.addColorStop(0, "#fbbf24"); grad.addColorStop(1, "#b45309");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      const r = 6;
-      const x0 = p.x - w/2, y0 = y - h;
-      ctx.moveTo(x0 + r, y0);
-      ctx.arcTo(x0 + w, y0, x0 + w, y0 + h, r);
-      ctx.arcTo(x0 + w, y0 + h, x0, y0 + h, r);
-      ctx.arcTo(x0, y0 + h, x0, y0, r);
-      ctx.arcTo(x0, y0, x0 + w, y0, r);
-      ctx.closePath(); ctx.fill();
-      // head
-      if (!isSliding) {
-        ctx.fillStyle = "#fcd34d";
-        ctx.beginPath(); ctx.arc(p.x, y - h - 6, 8, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = "#111";
-        ctx.fillRect(p.x - 3, y - h - 7, 2, 2);
-        ctx.fillRect(p.x + 1, y - h - 7, 2, 2);
-      }
-      // legs
-      if (!isSliding && s.jumpY === 0) {
-        const swing = Math.sin(s.frame * 0.5) * 4;
-        ctx.fillStyle = "#1f2937";
-        ctx.fillRect(p.x - 8, y, 6, 6 + swing);
-        ctx.fillRect(p.x + 2, y, 6, 6 - swing);
-      }
-    };
-
-    const loop = () => {
-      const s = stRef.current;
-      if (pausedRef.current) {
-        ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0,0,W,H);
-        ctx.fillStyle = "#fff"; ctx.font = "bold 28px sans-serif"; ctx.textAlign = "center";
-        ctx.fillText("⏸ הושהה", W/2, H/2);
-        raf = requestAnimationFrame(loop); return;
-      }
-      s.frame++;
-      s.speed = Math.min(0.045, 0.018 + s.frame * 0.000012);
-      s.score = Math.floor(s.frame / 3) + s.coinsCollected * 5;
-      setScore(s.score);
-
-      // lane interpolation
-      s.laneT += (s.targetLane - s.laneT) * 0.22;
-
-      // jump physics
-      if (s.jumpV !== 0 || s.jumpY < 0) {
-        s.jumpY += s.jumpV;
-        s.jumpV += 0.55;
-        if (s.jumpY >= 0) { s.jumpY = 0; s.jumpV = 0; }
-      }
-      if (s.sliding > 0) s.sliding--;
-
-      s.roadOffset = (s.roadOffset + s.speed) % 1;
-
-      // spawn obstacles
-      const spawnEvery = Math.max(28, 60 - Math.floor(s.frame / 200));
-      if (s.frame % spawnEvery === 0) {
-        const lane = Math.floor(Math.random() * 3);
-        const type: "barrier" | "train" = Math.random() < 0.45 ? "train" : "barrier";
-        s.obstacles.push({ lane, z: 1, type });
-      }
-      if (s.frame % 40 === 0) {
-        const lane = Math.floor(Math.random() * 3);
-        // string of coins
-        for (let i = 0; i < 4; i++) s.coins.push({ lane, z: Math.min(1, 1 + i * 0.06), got: false });
-      }
-
-      // advance depth
-      s.obstacles.forEach(o => o.z -= s.speed);
-      s.coins.forEach(c => c.z -= s.speed);
-      s.obstacles = s.obstacles.filter(o => o.z > -0.05);
-      s.coins = s.coins.filter(c => c.z > -0.05 && !c.got);
-
-      // collisions when in player z range
-      const playerLane = Math.round(s.laneT);
-      for (const o of s.obstacles) {
-        if (o.z < 0.06 && o.z > -0.02 && o.lane === playerLane) {
-          const isJumping = s.jumpY < -10;
-          const isSliding = s.sliding > 0;
-          if (o.type === "barrier" && isSliding) continue;
-          if (o.type === "barrier" && isJumping) continue;
-          if (o.type === "train" && (isSliding || isJumping)) {
-            // trains are tall — only sliding helps if low train; here all trains are tall, sliding doesn't help
-            // but allow nothing — collision
-          }
-          s.alive = false;
-          for (let i = 0; i < 18; i++) {
-            const p = project(LANE_X[playerLane], 0.02);
-            s.particles.push({ x: p.x, y: p.y - 20, vx: (Math.random()-0.5)*6, vy: -Math.random()*5, life: 30, color: "#f87171" });
-          }
-        }
-      }
-      for (const c of s.coins) {
-        if (!c.got && c.z < 0.06 && c.z > -0.02 && c.lane === playerLane && s.jumpY > -28) {
-          c.got = true; s.coinsCollected++; setCoins(s.coinsCollected); playSound("correct");
-          const p = project(LANE_X[c.lane], 0.02);
-          for (let i = 0; i < 6; i++) {
-            s.particles.push({ x: p.x, y: p.y - 22, vx: (Math.random()-0.5)*3, vy: -Math.random()*3, life: 22, color: "#fde047" });
-          }
-        }
-      }
-
-      // particles
-      s.particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.life--; });
-      s.particles = s.particles.filter(p => p.life > 0);
-
-      // draw
-      drawSky();
-      drawRoad(s.roadOffset);
-      // far → near
-      const sorted = [...s.obstacles, ...s.coins].sort((a, b) => b.z - a.z);
-      for (const item of sorted) {
-        if ("type" in item) drawObstacle(item);
-        else drawCoin(item, s.frame);
-      }
-      drawPlayer(s);
-      for (const p of s.particles) {
-        ctx.globalAlpha = Math.max(0, p.life / 30);
-        ctx.fillStyle = p.color;
-        ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-
-      // HUD
-      ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(8, 8, 150, 28);
-      ctx.fillStyle = "#fff"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left";
-      ctx.fillText(`ציון ${s.score}  🪙 ${s.coinsCollected}`, 14, 27);
-
-      if (!s.alive) {
-        setRunning(false); setGameOver(true);
-        setArcadeBest("runner", s.score);
-        setBest(b => Math.max(b, s.score));
-        if (s.score > 0) submitScore("runner", userCode, userName, s.score);
-        playSound("error");
-        return;
-      }
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [running, userCode, userName]);
-
-  // keyboard
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === "ArrowLeft")  { e.preventDefault(); moveLane(-1); }
+      if (!running) return;
+      if (e.code === "ArrowLeft") { e.preventDefault(); moveLane(-1); }
       else if (e.code === "ArrowRight") { e.preventDefault(); moveLane(1); }
       else if (e.code === "ArrowUp" || e.code === "Space") { e.preventDefault(); jump(); }
       else if (e.code === "ArrowDown") { e.preventDefault(); slide(); }
@@ -350,12 +515,11 @@ export const RunnerGame = ({ userCode, userName }: Props) => {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [moveLane, jump, slide]);
+  }, [moveLane, jump, slide, togglePause, running]);
 
-  // touch
-  const touchRef = useRef({ x: 0, y: 0, t: 0 });
+  const touchRef = useRef({ x: 0, y: 0 });
   const onTouchStart = (e: React.TouchEvent) => {
-    touchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+    touchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   };
   const onTouchEnd = (e: React.TouchEvent) => {
     const dx = e.changedTouches[0].clientX - touchRef.current.x;
@@ -372,30 +536,48 @@ export const RunnerGame = ({ userCode, userName }: Props) => {
         <span>ניקוד: <b>{score}</b></span>
         <span>🪙 <b>{coins}</b></span>
         <span>שיא: <b>{best}</b></span>
-        {running && !gameOver && <Button size="sm" variant="outline" onClick={togglePause}>{paused ? "▶️" : "⏸"}</Button>}
+        {running && !gameOver && (
+          <Button size="sm" variant="outline" onClick={togglePause}>
+            {paused ? "▶️ המשך" : "⏸ השהה"}
+          </Button>
+        )}
       </div>
-      <div className="relative w-full">
-        <canvas
-          ref={canvasRef}
-          width={W} height={H}
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
-          className="rounded-lg border-2 border-primary/30 touch-none w-full shadow-xl select-none"
-          style={{ aspectRatio: `${W}/${H}` }}
-        />
-        {gameOver && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/55 rounded-lg animate-fade-in">
-            <div className="bg-card p-5 rounded-2xl text-center shadow-2xl border-2 border-primary/40">
-              <div className="text-2xl mb-1">💥 התנגשת!</div>
-              <div>ניקוד: <b>{score}</b> · 🪙 {coins}</div>
-              <div className="text-xs text-muted-foreground">שיא: {best}</div>
-              <Button onClick={start} className="mt-3 w-full">🔁 נסה שוב</Button>
+      <div
+        className="relative w-full rounded-lg overflow-hidden border-2 border-primary/30 shadow-2xl select-none touch-none"
+        style={{ aspectRatio: "16/10" }}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
+        {running && (
+          <Canvas shadows dpr={[1, 1.6]} camera={{ fov: 60, near: 0.1, far: 200 }}>
+            <Suspense fallback={null}>
+              <GameScene state={state} trackOffset={trackOffset} onTick={onTick} />
+            </Suspense>
+          </Canvas>
+        )}
+        {!running && !gameOver && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-slate-800 via-slate-900 to-black">
+            <div className="text-center space-y-3">
+              <div className="text-3xl">🏃‍♂️ ריצה אינסופית</div>
+              <Button onClick={start} size="lg" className="shadow-2xl">▶️ התחל ריצה</Button>
+              <div className="text-xs text-muted-foreground">החלק לכיוונים • למעלה לקפיצה • למטה להחלקה</div>
             </div>
           </div>
         )}
-        {!running && !gameOver && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-slate-700/40 to-slate-900/40 rounded-lg">
-            <Button onClick={start} size="lg" className="shadow-2xl">▶️ התחל ריצה</Button>
+        {paused && running && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/55 animate-fade-in">
+            <div className="text-2xl font-bold text-white">⏸ הושהה</div>
+          </div>
+        )}
+        {gameOver && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/65 animate-fade-in">
+            <div className="bg-card p-5 rounded-2xl text-center shadow-2xl border-2 border-primary/40 min-w-[220px]">
+              <div className="text-2xl mb-2">💥 התנגשת!</div>
+              <div className="mb-1">ניקוד: <b>{score}</b></div>
+              <div className="mb-1">🪙 מטבעות: <b>{coins}</b></div>
+              <div className="text-xs text-muted-foreground mb-3">שיא: {best}</div>
+              <Button onClick={start} className="w-full">🔁 נסה שוב</Button>
+            </div>
           </div>
         )}
       </div>
@@ -411,7 +593,7 @@ export const RunnerGame = ({ userCode, userName }: Props) => {
       </div>
 
       <p className="text-xs text-muted-foreground text-center">
-        החלק שמאל/ימין להחלפת מסלול • למעלה לקפיצה • למטה להחלקה • אסוף מטבעות והימנע מרכבות ומחסומים
+        החלק שמאל/ימין להחלפת מסלול • למעלה לקפיצה • למטה להחלקה • אסוף מטבעות והימנע מרכבות, מחסומים ומוטות
       </p>
     </Card>
   );
