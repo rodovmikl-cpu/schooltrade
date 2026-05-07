@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState, useCallback, Suspense } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, Cylinder, RoundedBox, Sparkles, Stars } from "@react-three/drei";
+import { useEffect, useRef, useState, useCallback, Suspense, useMemo } from "react";
+import { Canvas, useFrame, useThree, useLoader } from "@react-three/fiber";
+import { RoundedBox, Sparkles, Stars, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+
+// Official three.js example model — animated rigged character with built-in
+// animations: "Running", "Jump", "Idle", "Death", "Walking", "Dance", etc.
+const ROBOT_URL = "https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb";
+useGLTF.preload(ROBOT_URL);
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { submitScore } from "@/components/games/Leaderboard";
