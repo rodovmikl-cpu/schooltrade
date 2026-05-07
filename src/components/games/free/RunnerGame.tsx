@@ -49,91 +49,87 @@ interface SharedState {
   onCoin?: () => void;
 }
 
-// === Player Character (stylized capsule character) ===
+// === Player Character (real animated GLTF: three.js RobotExpressive) ===
 const Player = ({ state }: { state: React.MutableRefObject<SharedState> }) => {
   const group = useRef<THREE.Group>(null!);
-  const leftLeg = useRef<THREE.Mesh>(null!);
-  const rightLeg = useRef<THREE.Mesh>(null!);
-  const leftArm = useRef<THREE.Mesh>(null!);
-  const rightArm = useRef<THREE.Mesh>(null!);
-  const body = useRef<THREE.Group>(null!);
+  const gltf = useGLTF(ROBOT_URL) as any;
+
+  // Clone scene so multiple mounts don't share transforms
+  const scene = useMemo(() => {
+    const s = gltf.scene.clone(true);
+    s.traverse((o: any) => {
+      if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; }
+    });
+    return s;
+  }, [gltf.scene]);
+
+  const mixer = useMemo(() => new THREE.AnimationMixer(scene), [scene]);
+  const actions = useMemo(() => {
+    const map: Record<string, THREE.AnimationAction> = {};
+    (gltf.animations as THREE.AnimationClip[]).forEach((clip) => {
+      map[clip.name] = mixer.clipAction(clip);
+    });
+    return map;
+  }, [gltf.animations, mixer]);
+
+  const currentRef = useRef<string>("");
+  const playAction = (name: string, opts: { loop?: boolean; fade?: number; timeScale?: number } = {}) => {
+    const { loop = true, fade = 0.2, timeScale = 1 } = opts;
+    const next = actions[name];
+    if (!next || currentRef.current === name) return;
+    const prev = actions[currentRef.current];
+    next.reset();
+    next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+    next.clampWhenFinished = !loop;
+    next.timeScale = timeScale;
+    next.fadeIn(fade).play();
+    if (prev && prev !== next) prev.fadeOut(fade);
+    currentRef.current = name;
+  };
+
+  useEffect(() => {
+    // Start running
+    playAction("Running", { timeScale: 1.3 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actions]);
 
   useFrame((_, dt) => {
     const s = state.current;
     if (!group.current) return;
+    mixer.update(dt);
     group.current.position.x = s.laneX;
     group.current.position.y = s.y;
     group.current.position.z = PLAYER_Z;
 
-    const sliding = s.sliding > 0;
-    const targetScaleY = sliding ? 0.55 : 1;
-    body.current.scale.y += (targetScaleY - body.current.scale.y) * Math.min(1, dt * 14);
-    body.current.position.y = sliding ? -0.35 : 0;
+    // animation state machine
+    if (!s.alive) {
+      playAction("Death", { loop: false, fade: 0.15 });
+    } else if (s.y > 0.05 || s.vy > 0) {
+      playAction("Jump", { loop: false, fade: 0.1, timeScale: 1.4 });
+    } else if (s.sliding > 0) {
+      // no built-in slide — squash + use Idle
+      playAction("Idle", { fade: 0.05, timeScale: 2 });
+    } else {
+      playAction("Running", { fade: 0.15, timeScale: Math.min(2, 1 + s.speed / 30) });
+    }
 
-    const t = performance.now() * 0.012 * (s.speed / 14);
-    const swing = sliding || s.y > 0.05 ? 0 : Math.sin(t) * 0.9;
-    leftLeg.current.rotation.x = swing;
-    rightLeg.current.rotation.x = -swing;
-    leftArm.current.rotation.x = -swing * 0.7;
-    rightArm.current.rotation.x = swing * 0.7;
+    // squash for slide
+    const sliding = s.sliding > 0;
+    const targetY = sliding ? 0.45 : 1;
+    scene.scale.y += (targetY - scene.scale.y) * Math.min(1, dt * 14);
+    scene.scale.x = scene.scale.z = 1;
+    scene.position.y = sliding ? -0.25 : 0;
 
     // tilt during lane change
-    const dx = (s.lane === 0 ? -2.2 : s.lane === 1 ? 0 : 2.2) - s.laneX;
+    const targetX = (s.lane === 0 ? -2.2 : s.lane === 1 ? 0 : 2.2);
+    const dx = targetX - s.laneX;
     group.current.rotation.z = THREE.MathUtils.clamp(-dx * 0.12, -0.25, 0.25);
+    group.current.rotation.y = Math.PI; // face the camera/forward
   });
 
   return (
     <group ref={group}>
-      <group ref={body}>
-        {/* torso */}
-        <RoundedBox args={[0.85, 1.1, 0.55]} radius={0.18} smoothness={4} position={[0, 0.55, 0]} castShadow>
-          <meshStandardMaterial color="#ef4444" roughness={0.5} metalness={0.1} />
-        </RoundedBox>
-        {/* hood/backpack */}
-        <RoundedBox args={[0.7, 0.55, 0.3]} radius={0.12} smoothness={4} position={[0, 0.7, -0.35]} castShadow>
-          <meshStandardMaterial color="#7f1d1d" roughness={0.7} />
-        </RoundedBox>
-        {/* head */}
-        <mesh position={[0, 1.45, 0.05]} castShadow>
-          <sphereGeometry args={[0.32, 24, 24]} />
-          <meshStandardMaterial color="#fcd9b6" roughness={0.6} />
-        </mesh>
-        {/* cap */}
-        <mesh position={[0, 1.65, 0.02]} castShadow>
-          <sphereGeometry args={[0.34, 24, 24, 0, Math.PI * 2, 0, Math.PI / 2]} />
-          <meshStandardMaterial color="#fde047" roughness={0.4} metalness={0.2} />
-        </mesh>
-        <RoundedBox args={[0.5, 0.06, 0.18]} radius={0.03} smoothness={3} position={[0, 1.55, 0.28]} castShadow>
-          <meshStandardMaterial color="#fde047" />
-        </RoundedBox>
-        {/* arms */}
-        <mesh ref={leftArm} position={[-0.55, 0.8, 0]} castShadow>
-          <capsuleGeometry args={[0.13, 0.55, 6, 12]} />
-          <meshStandardMaterial color="#1d4ed8" roughness={0.6} />
-        </mesh>
-        <mesh ref={rightArm} position={[0.55, 0.8, 0]} castShadow>
-          <capsuleGeometry args={[0.13, 0.55, 6, 12]} />
-          <meshStandardMaterial color="#1d4ed8" roughness={0.6} />
-        </mesh>
-        {/* legs */}
-        <mesh ref={leftLeg} position={[-0.22, -0.1, 0]} castShadow>
-          <capsuleGeometry args={[0.16, 0.6, 6, 12]} />
-          <meshStandardMaterial color="#0f172a" roughness={0.7} />
-        </mesh>
-        <mesh ref={rightLeg} position={[0.22, -0.1, 0]} castShadow>
-          <capsuleGeometry args={[0.16, 0.6, 6, 12]} />
-          <meshStandardMaterial color="#0f172a" roughness={0.7} />
-        </mesh>
-        {/* shoes */}
-        <mesh position={[-0.22, -0.5, 0.1]} castShadow>
-          <boxGeometry args={[0.32, 0.16, 0.45]} />
-          <meshStandardMaterial color="#fef3c7" />
-        </mesh>
-        <mesh position={[0.22, -0.5, 0.1]} castShadow>
-          <boxGeometry args={[0.32, 0.16, 0.45]} />
-          <meshStandardMaterial color="#fef3c7" />
-        </mesh>
-      </group>
+      <primitive object={scene} scale={0.45} position={[0, 0, 0]} />
       {/* shadow disk */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.99, 0]}>
         <circleGeometry args={[0.7, 24]} />
