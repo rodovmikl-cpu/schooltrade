@@ -24,7 +24,7 @@ type GameKey = "menu" | "snake" | "crypto" | "math" | "hebrew" | "english" | "fl
 
 const GAMES = [
   { key: "flappy" as GameKey, label: "🐤 פלאפי", desc: "טוס בין הצינורות וצבור נקודות", color: "from-sky-500/20 to-cyan-500/10 border-sky-500/40 hover:border-sky-400/70" },
-  { key: "runner" as GameKey, label: "🏃 ראנר", desc: "רוץ, קפוץ ואסוף מטבעות", color: "from-orange-500/20 to-amber-500/10 border-orange-500/40 hover:border-orange-400/70" },
+  { key: "runner" as GameKey, label: "🏃 Subway Surfers", desc: "רוץ, קפוץ ואסוף מטבעות", color: "from-orange-500/20 to-amber-500/10 border-orange-500/40 hover:border-orange-400/70" },
   { key: "idle" as GameKey, label: "🍪 קליקר", desc: "לחץ, שדרג, צבור הון פסיבי", color: "from-amber-500/20 to-yellow-500/10 border-amber-500/40 hover:border-amber-400/70" },
   { key: "snakeArcade" as GameKey, label: "🐍 נחש ארקייד", desc: "גדל ככל שאוכל, הימנע מקיר", color: "from-green-500/20 to-emerald-500/10 border-green-500/40 hover:border-green-400/70" },
   { key: "puzzle2048" as GameKey, label: "🧩 פאזל 2048", desc: "מזג מספרים זהים והגע ל-2048", color: "from-pink-500/20 to-rose-500/10 border-pink-500/40 hover:border-pink-400/70" },
@@ -46,7 +46,7 @@ export const GamesHub = ({ userCode, userName }: GamesHubProps) => {
   const renderArcade = () => {
     switch (activeGame) {
       case "flappy": return <GameWithLeaderboard gameKey="flappy" userCode={userCode} title="🐤 פלאפי"><FlappyGame userCode={userCode} userName={userName} /></GameWithLeaderboard>;
-      case "runner": return <GameWithLeaderboard gameKey="runner" userCode={userCode} title="🏃 ראנר"><RunnerGame userCode={userCode} userName={userName} /></GameWithLeaderboard>;
+      case "runner": return <GameWithLeaderboard gameKey="runner" userCode={userCode} title="🏃 Subway Surfers"><RunnerGame userCode={userCode} userName={userName} /></GameWithLeaderboard>;
       case "idle": return <GameWithLeaderboard gameKey="idle" userCode={userCode} title="🍪 קליקר"><IdleClickerGame userCode={userCode} userName={userName} /></GameWithLeaderboard>;
       case "snakeArcade": return <GameWithLeaderboard gameKey="snake" userCode={userCode} title="🐍 נחש ארקייד"><SnakeArcadeGame userCode={userCode} userName={userName} /></GameWithLeaderboard>;
       case "puzzle2048": return <GameWithLeaderboard gameKey="puzzle2048" userCode={userCode} title="🧩 פאזל 2048"><Puzzle2048Game userCode={userCode} userName={userName} /></GameWithLeaderboard>;
