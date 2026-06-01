@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Subway Surfers</title>
+  <link rel="stylesheet" href="style.css" type="text/css">
+  <style>
+    html, body { background: #0b0b12; margin: 0; padding: 0; overflow: hidden; height: 100%; font-family: system-ui, -apple-system, sans-serif; }
+    #glcanvas { display: block; width: 100vw !important; height: 100vh !important; touch-action: none; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: none; align-items: center; justify-content: center; z-index: 10; }
+    .modal-content { background: linear-gradient(135deg,#1a1a2e,#16213e); color:#fff; padding: 28px 32px; border-radius: 18px; text-align:center; min-width: 260px; border:1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    .modal-content p { margin: 8px 0; }
+    .game_title { font-size: 26px; font-weight: 800; background: linear-gradient(90deg,#00C853,#64dd17); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .modal-footer { margin-top: 16px; padding: 10px 22px; background:#00C853; color:#000; border-radius:10px; font-weight:700; display:inline-block; }
+    .play_again { margin-top: 16px; padding: 10px 22px; background:#00C853; color:#000; border-radius:10px; font-weight:700; display:inline-block; }
+    .score { position: fixed; top: 12px; left: 12px; right: 12px; display:none; justify-content:center; pointer-events:none; z-index: 5; }
+    .score_box { background: rgba(0,0,0,0.55); color:#fff; padding: 8px 18px; border-radius: 999px; backdrop-filter: blur(8px); border:1px solid rgba(255,255,255,0.15); font-weight:700; }
+    .score_box h1, .score_box h2 { display:inline-block; margin: 0 6px; font-size: 16px; font-weight:700; }
+    .score_gain { color:#00E676; }
+    .touch-controls { position: fixed; bottom: 12px; left: 0; right: 0; display: none; justify-content: space-between; padding: 0 16px; z-index: 6; pointer-events: none; }
+    .touch-controls .pad { display:grid; grid-template-columns: repeat(3,56px); gap:8px; pointer-events:auto; }
+    .touch-controls button { width:56px; height:56px; border-radius:14px; background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.2); font-size:22px; backdrop-filter: blur(6px); }
+    .touch-controls button:active { background:#00C853; color:#000; }
+    @media (pointer: coarse) { .touch-controls { display:flex; } }
+  </style>
+</head>
+
+<body>
+  <canvas id="glcanvas" width="1024" height="800"></canvas>
+
+  <div id="ModalBox" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <p class='game_title'></p>
+        <p class="game_score" style="font-size: 20px"></p>
+        <div class="modal-footer" id="arrow" style="cursor:pointer;">התחל משחק ▶</div>
+        <p class="play_again" id="play_again" style="cursor:pointer; display:none;">שחק שוב</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="GameScore" class="score">
+    <div class="score_content">
+      <div class="score_box">
+        <h1>ניקוד:</h1>
+        <h2 class="score_gain">0</h2>
+      </div>
+    </div>
+  </div>
+
+  <div class="touch-controls">
+    <div class="pad">
+      <button data-key="ArrowLeft">⬅</button>
+      <button data-key="ArrowUp">⬆</button>
+      <button data-key="ArrowRight">➡</button>
+      <button></button>
+      <button data-key="ArrowDown">⬇</button>
+      <button></button>
+    </div>
+  </div>
+
+<script type="text/javascript">
+  var modal = document.getElementById('ModalBox');
+  var score = document.getElementById('GameScore');
+  var music;
+  music = new sound("assets/bgmusic.mp3");
+  var lastReportedScore = 0;
+  var gameOverReported = false;
+
+  function start() {
+    modal.style.display = "flex";
+    document.querySelector(".game_title").textContent = "Subway Surfers";
+    document.querySelector(".play_again").style.display = "none";
+  }
+
+  document.getElementById("arrow").addEventListener("click", start_box);
+  document.getElementById("play_again").addEventListener("click", restart_game);
+
+  function start_box() {
+    window.game_start = true;
+    try { music.play(); } catch(e) {}
+    modal.style.display = "none";
+    score.style.display = "flex";
+    gameOverReported = false;
+  }
+
+  function restart_game() { document.location.reload(); }
+
+  function update_score() {
+    var s = (window.objects && objects[0]) ? objects[0].score : 0;
+    document.querySelector(".score_gain").textContent = s;
+    if (s !== lastReportedScore) {
+      lastReportedScore = s;
+      try { parent.postMessage({ type: 'subway:score', score: s }, '*'); } catch(e) {}
+    }
+  }
+
+  function Game_over() {
+    modal.style.display = "flex";
+    score.style.display = "none";
+    var finalScore = (window.objects && objects[0]) ? objects[0].score : 0;
+    document.querySelector(".game_title").textContent = window.game_over ? "המשחק נגמר" : (window.finish ? "ניצחת!" : "המשחק נגמר");
+    var y = document.querySelector(".game_score");
+    y.textContent = "הניקוד שלך: " + finalScore;
+    y.style.display = "block";
+    document.querySelector(".modal-footer").style.display = "none";
+    var w = document.querySelector(".play_again");
+    w.style.display = "inline-block";
+    w.textContent = "שחק שוב";
+    try { music.stop(); } catch(e) {}
+    if (!gameOverReported) {
+      gameOverReported = true;
+      try { parent.postMessage({ type: 'subway:gameover', score: finalScore }, '*'); } catch(e) {}
+    }
+  }
+
+  function sound(src) {
+    this.sound = document.createElement("audio");
+    this.sound.src = src;
+    this.sound.setAttribute("preload", "auto");
+    this.sound.setAttribute("controls", "none");
+    this.sound.loop = true;
+    this.sound.style.display = "none";
+    document.body.appendChild(this.sound);
+    this.play = function() { this.sound.play(); }
+    this.stop = function() { this.sound.pause(); }
+  }
+
+  // Touch controls -> synthesize key events
+  document.querySelectorAll('.touch-controls button[data-key]').forEach(function(btn){
+    var key = btn.getAttribute('data-key');
+    var fire = function(type){
+      var ev = new KeyboardEvent(type, { key: key, code: key, bubbles: true });
+      document.dispatchEvent(ev);
+      window.dispatchEvent(ev);
+    };
+    btn.addEventListener('touchstart', function(e){ e.preventDefault(); fire('keydown'); }, {passive:false});
+    btn.addEventListener('touchend',   function(e){ e.preventDefault(); fire('keyup'); }, {passive:false});
+    btn.addEventListener('mousedown',  function(e){ fire('keydown'); });
+    btn.addEventListener('mouseup',    function(e){ fire('keyup'); });
+  });
+
+  // Swipe gestures
+  var sx=0, sy=0, st=0;
+  document.addEventListener('touchstart', function(e){
+    var t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now();
+  }, {passive:true});
+  document.addEventListener('touchend', function(e){
+    var t = e.changedTouches[0]; var dx = t.clientX - sx; var dy = t.clientY - sy;
+    if (Math.abs(dx) < 25 && Math.abs(dy) < 25) return;
+    var key;
+    if (Math.abs(dx) > Math.abs(dy)) key = dx > 0 ? 'ArrowRight' : 'ArrowLeft';
+    else key = dy > 0 ? 'ArrowDown' : 'ArrowUp';
+    var down = new KeyboardEvent('keydown', { key: key, code: key, bubbles: true });
+    var up = new KeyboardEvent('keyup', { key: key, code: key, bubbles: true });
+    document.dispatchEvent(down); window.dispatchEvent(down);
+    setTimeout(function(){ document.dispatchEvent(up); window.dispatchEvent(up); }, 80);
+  }, {passive:true});
+
+  start();
+</script>
+<script src="./libs/gl-matrix.js"></script>
+<script src="./libs/jquery-3.3.1.min.js"></script>
+<script src="./libs/webgl-utils.js"></script>
+
+<script src="./src/utility.js"></script>
+<script src="./src/camera.js"></script>
+<script src="./src/texture.js"></script>
+<script src="./src/finishline.js"></script>
+<script src="./src/boost.js"></script>
+<script src="./src/obstacle.js"></script>
+<script src="./src/barrier.js"></script>
+<script src="./src/coin.js"></script>
+<script src="./src/ground.js"></script>
+<script src="./src/track.js"></script>
+<script src="./src/police.js"></script>
+<script src="./src/player.js"></script>
+<script src="./src/wall.js"></script>
+<script src="./src/keyhandler.js"></script>
+<script src="./src/draw.js"></script>
+<script src="./src/main.js"></script>
+
+</html>
