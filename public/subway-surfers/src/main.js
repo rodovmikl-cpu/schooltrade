@@ -212,14 +212,26 @@ function main() {
     }
 
     update_score();
-    if (game_over || finish) {
+    if (game_over) {
       Game_over();
     }
     const projectionMatrix = clearScene(gl, objects[0].translate);
 
     var rand = getRandomInt(1, 200);
-    if (!game_over && !finish && game_start) {
-      if (rand % 13 == 0) {
+    if (!game_over && game_start) {
+      // Gradual difficulty scaling — endless mode
+      if (speed < 0.22) speed += 0.00002;
+      // Distance-based score (endless): +1 per ~33 frames
+      objects[0]._distAcc = (objects[0]._distAcc || 0) + speed;
+      if (objects[0]._distAcc >= 2.5) {
+        objects[0].score += 1;
+        objects[0]._distAcc = 0;
+      }
+
+      // Density of spawns scales with speed
+      var density = Math.min(2.2, 1 + (speed - 0.075) * 8);
+
+      if (rand % Math.max(6, Math.floor(13 / density)) == 0) {
 
         let r = getRandomInt(0, 2);
         let track = 0.0;
@@ -233,13 +245,13 @@ function main() {
         if (coins.length == 0) {
           coins.push(coin(gl, track, -10));
           buffer_coins.push(initBuffers(gl, coins[0]));
-        } else if (coins.length < 45) {
+        } else if (coins.length < 60) {
           coins.push(coin(gl, track, coins[coins.length - 1].translate[2] - 2));
           buffer_coins.push(initBuffers(gl, coins[coins.length - 1]));
         }
       }
 
-      if (rand % 17 == 0) {
+      if (rand % Math.max(8, Math.floor(17 / density)) == 0) {
 
         let x = getRandomInt(0, 2);
         let track = 0.0;
@@ -253,13 +265,13 @@ function main() {
         if (obstacles.length == 0) {
           obstacles.push(obstacle(gl, track, -10));
           buffer_obstacles.push(initBuffers(gl, obstacles[0]));
-        } else if (obstacles.length < 5) {
+        } else if (obstacles.length < 8) {
           obstacles.push(obstacle(gl, track, obstacles[obstacles.length - 1].translate[2] - 50));
           buffer_obstacles.push(initBuffers(gl, obstacles[obstacles.length - 1]));
         }
       }
 
-      if (rand % 19 == 0) {
+      if (rand % Math.max(9, Math.floor(19 / density)) == 0) {
 
         let x = getRandomInt(0, 2);
         let track = 0.0;
@@ -273,7 +285,7 @@ function main() {
         if (barriers.length == 0) {
           barriers.push(barrier(gl, track, -35));
           buffer_barriers.push(initBuffers(gl, barriers[0]));
-        } else if (barriers.length < 5) {
+        } else if (barriers.length < 8) {
           barriers.push(barrier(gl, track, barriers[barriers.length - 1].translate[2] - 7));
           buffer_barriers.push(initBuffers(gl, barriers[barriers.length - 1]));
         }
@@ -300,7 +312,6 @@ function main() {
       obstacle_tick(gl, obstacles, objects[0]);
       barrier_tick(gl, barriers, objects[0], objects[1]);
       coin_tick(gl, coins, objects[0]);
-      console.log(objects[0].score);
       player_tick(objects[0], obstacles);
       police_tick(objects[1], objects[0]);
       ground_tick(gl, objects);
@@ -308,11 +319,7 @@ function main() {
       boost_tick(gl, boosts, objects[0]);
     }
 
-    if (objects[0].score >= 100) {
-      if (!finish && !game_over)
-        finishline_tick(finish_object, objects[0]);
-      drawScene(gl, programInfo, buffer_finish_object, deltaTime, projectionMatrix, finish_object, finish_object.texture);
-    }
+    // Endless mode: finish line disabled.
     for (let i = 0; i < buffer_objects.length; i++) {
       drawScene(gl, programInfo, buffer_objects[i], deltaTime, projectionMatrix, objects[i], objects[i].texture);
     }

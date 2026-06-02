@@ -141,6 +141,8 @@ function player(gl) {
     'jumpboost': false,
     'flyboost': false,
     'jumpheight': -0.15,
+    'sliding': 0,
+    'baseY': -0.70,
   }
 }
 
@@ -181,9 +183,18 @@ function player_tick(object, obstacles) {
     }
   }
 
-  if (statusKeys[32]) {
-    // Space bar
+  // Jump: Space (32), Up arrow (38), W (87)
+  if ((statusKeys[32] || statusKeys[38] || statusKeys[87]) && object.sliding <= 0 && object.translate[1] <= object.baseY + 0.001) {
     object.jump = 1;
+    object.speed_y = 0.1;
+  }
+
+  // Slide: Down arrow (40) or S (83) — only when on the ground
+  if ((statusKeys[40] || statusKeys[83]) && object.sliding <= 0 && object.translate[1] <= object.baseY + 0.001 && object.jump != 1) {
+    object.sliding = 45; // ~0.75s at 60fps
+  }
+  if (object.sliding > 0) {
+    object.sliding -= 1;
   }
 
   if (object.jump == 1) {
