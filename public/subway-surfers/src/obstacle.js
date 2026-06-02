@@ -180,10 +180,9 @@ function obstacle_tick(gl, obstacles, player) {
 
   for (let i = 0; i < obstacles.length; ++i) {
     obstacles[i].translate[2] += speed;
-    
+
     if (player.translate[0] == obstacles[i].translate[0] && !(player.translate[2] - 0.15 >= obstacles[i].translate[2] + 0.75 || player.translate[2] + 0.15 <= obstacles[i].translate[2] - 0.75) && player.translate[1] < obstacles[i].translate[1] + 0.5) {
       game_over = true;
-      console.log("###GAME OVER###");
     }
 
     if (obstacles[i].translate[2] > 2) {

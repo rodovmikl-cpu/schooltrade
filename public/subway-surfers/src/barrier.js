@@ -178,22 +178,12 @@ function barrier_tick(gl, barriers, player, police){
     barriers[i].translate[2] += speed;
 
     if (player.translate[0] == barriers[i].translate[0] && !(player.translate[2] - 0.15 >= barriers[i].translate[2] + 0.05 || player.translate[2] + 0.15 <= barriers[i].translate[2] - 0.05) && player.translate[1] == -0.70) {
-      speed -= 0.001;
-
-      setTimeout(function() {
-        speed = 0.075;
-        police.setback = false;
-      }, 7000);
-
-      speed_wall -=0.01;
-      police.setback = true;
-      if(speed < 0.03){
-        speed = 0.03;
+      // Sliding lets you pass under the barrier
+      if (player.sliding && player.sliding > 0) {
+        // safe pass — small reward
+      } else {
+        game_over = true;
       }
-      if(speed_wall < 0.05){
-        speed_wall = 0.05;
-      }
-
     }
 
     if (barriers[i].translate[2] > 2) {

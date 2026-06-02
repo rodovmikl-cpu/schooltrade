@@ -146,16 +146,13 @@ function police_tick(object, player) {
 
   object.translate[0] = player.translate[0];
 
+  // Slow, ambient approach — never catches the player in endless mode
   if (object.setback == false) {
-    object.translate[2] += 0.005;
-  }
-
-  if(object.setback == true){
+    if (object.translate[2] < -2.4) object.translate[2] += 0.0008;
+  } else {
     object.translate[2] -= 0.005;
-
-    if (player.translate[0] == object.translate[0] && !(player.translate[2] - 0.15 >= object.translate[2] + 0.15 || player.translate[2] + 0.15 <= object.translate[2] - 0.15)) {
-      game_over = true;
-      console.log("###GAME OVER###");
+    if (object.translate[2] < -3.0) {
+      object.setback = false;
     }
   }
 }
