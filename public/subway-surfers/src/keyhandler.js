@@ -1,16 +1,8 @@
-/*The keydown event occurs when a keyboard key is pressed down.*/
+// Keyboard state. Endless-runner overhaul: no console spam, supports
+// Arrow keys, WASD, Space (jump), Down/S (slide), Up/W (jump).
 $(document).keydown(function(event){
-	var charCode = event.keyCode;
-	var charStr = String.fromCharCode(charCode);
-	statusKeys[charCode] = true;
-  console.log(charStr,charCode);
+  statusKeys[event.keyCode] = true;
 });
-
-/* The keyup event occurs when a keyboard key is released. */
 $(document).keyup(function(event){
-
-	var charCode = event.keyCode;
-
-	var charStr = String.fromCharCode(charCode);
-	statusKeys[charCode] = false;
+  statusKeys[event.keyCode] = false;
 });
