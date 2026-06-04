@@ -28,6 +28,7 @@ import { GamesHub } from "@/components/games/GamesHub";
 import { KeifTab } from "@/components/keif/KeifTab";
 import { SchoolNews } from "@/components/games/SchoolNews";
 import { BooksTab } from "@/components/books/BooksTab";
+import { DailyStreak } from "@/components/DailyStreak";
 
 import { playSound } from "@/lib/sounds";
 
@@ -202,6 +203,7 @@ const Index = () => {
       className={`min-h-screen transition-all duration-1000 ${getBackgroundClass()} ${mounted ? "opacity-100" : "opacity-0"}`}
       style={{ transition: "opacity 0.5s ease, background 1s ease" }}
     >
+      {user && <DailyStreak userCode={user.code} />}
       {isHalloweenActive && <HalloweenDecorations />}
       {(isChristmasActive || isChristmasBackgroundOnly) && <ChristmasDecorations />}
       {isChristmasActive && <ChristmasCountdown />}

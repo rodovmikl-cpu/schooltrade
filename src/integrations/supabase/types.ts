@@ -554,6 +554,44 @@ export type Database = {
           },
         ]
       }
+      user_streaks: {
+        Row: {
+          created_at: string
+          current_streak: number
+          id: string
+          last_visit_date: string
+          longest_streak: number
+          updated_at: string
+          user_code: string
+        }
+        Insert: {
+          created_at?: string
+          current_streak?: number
+          id?: string
+          last_visit_date?: string
+          longest_streak?: number
+          updated_at?: string
+          user_code: string
+        }
+        Update: {
+          created_at?: string
+          current_streak?: number
+          id?: string
+          last_visit_date?: string
+          longest_streak?: number
+          updated_at?: string
+          user_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_streaks_user_code_fkey"
+            columns: ["user_code"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       users: {
         Row: {
           code: string
@@ -613,6 +651,26 @@ export type Database = {
         Returns: boolean
       }
       reset_monthly_photo_counts: { Args: never; Returns: undefined }
+      streak_check_in: {
+        Args: { _user_code: string }
+        Returns: {
+          current_streak: number
+          days_missed: number
+          last_visit_date: string
+          longest_streak: number
+          server_date: string
+        }[]
+      }
+      streak_status: {
+        Args: { _user_code: string }
+        Returns: {
+          current_streak: number
+          days_missed: number
+          last_visit_date: string
+          longest_streak: number
+          server_date: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
