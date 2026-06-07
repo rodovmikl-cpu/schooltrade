@@ -24,18 +24,26 @@ export const PremiumClubTab = ({ userCode, userName }: PremiumClubTabProps) => {
   const [activeGame, setActiveGame] = useState<string | null>(null);
 
   const PREMIUM_GAMES = [
+    { key: "vipSurvival", label: "⚔️ Arena Survival", desc: "זירת הישרדות אינסופית, נשקים, שדרוגים", color: "from-red-500/20 to-rose-500/10 border-red-500/40" },
+    { key: "topDownShooter", label: "🔫 Top-Down Shooter", desc: "ירי טופ-דאון, גלי אויבים, אקשן מהיר", color: "from-cyan-500/20 to-sky-500/10 border-cyan-500/40" },
+    { key: "towerDefense", label: "🧱 Tower Defense", desc: "בנה מגדלים, הגן על הבסיס, שדרג", color: "from-emerald-500/20 to-green-500/10 border-emerald-500/40" },
+    { key: "platformer", label: "⬛ Platformer", desc: "קפוץ, אסוף, הגע למטרה", color: "from-purple-500/20 to-violet-500/10 border-purple-500/40" },
+    { key: "match3", label: "🧩 Match-3 Campaign", desc: "מזג שלושה, השג יעדים, שלבים", color: "from-pink-500/20 to-rose-500/10 border-pink-500/40" },
     { key: "cryptoEmpire", label: "💎 אימפריית הקריפטו", desc: "שוק סודי, NFT נדירים, מכירות פומביות", color: "from-yellow-500/20 to-amber-500/10 border-yellow-500/40" },
     { key: "mindArena", label: "🧠 אליפות המוחות", desc: "חידות עילית, קודים סודיים, לוגיקה", color: "from-purple-500/20 to-violet-500/10 border-purple-500/40" },
     { key: "shadowMissions", label: "🕶️ משימות צללים", desc: "תפקידים, פריצות, בגידות", color: "from-cyan-500/20 to-sky-500/10 border-cyan-500/40" },
-    { key: "vipSurvival", label: "⚔️ אתגר ההישרדות", desc: "זירת PvE, לוט, כישורים מיוחדים", color: "from-red-500/20 to-rose-500/10 border-red-500/40" },
   ];
 
   const renderGame = () => {
     switch (activeGame) {
+      case "vipSurvival": return <VIPSurvival />;
+      case "topDownShooter": return <TopDownShooter />;
+      case "towerDefense": return <TowerDefense />;
+      case "platformer": return <PlatformerGame />;
+      case "match3": return <Match3Campaign />;
       case "cryptoEmpire": return <CryptoEmpire />;
       case "mindArena": return <MindArena />;
       case "shadowMissions": return <ShadowMissions />;
-      case "vipSurvival": return <VIPSurvival />;
       default: return null;
     }
   };
