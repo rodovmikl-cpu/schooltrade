@@ -1,7 +1,2 @@
-# Edit .gitmodules to remove lines 3-8, leaving only:
-# # Git submodules configuration
-# # No active submodules at this time
-
-git add .gitmodules
-git commit -m "Fix .gitmodules syntax"
-git push
+# Git submodules configuration
+# No active submodules at this time
