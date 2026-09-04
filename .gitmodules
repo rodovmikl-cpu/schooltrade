@@ -1,8 +1,7 @@
-# Git submodules configuration
-# No active submodules at this time
-git rm --cached platformer
-rm -rf platformer
-git config -f .gitmodules --remove-section submodule.platformer
+# Edit .gitmodules to remove lines 3-8, leaving only:
+# # Git submodules configuration
+# # No active submodules at this time
+
 git add .gitmodules
-git commit -m "Remove platformer submodule"
+git commit -m "Fix .gitmodules syntax"
 git push
