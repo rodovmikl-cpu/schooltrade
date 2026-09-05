@@ -2,7 +2,7 @@ import { IframeGame } from "./IframeGame";
 
 export const PlatformerGame = () => (
   <IframeGame
-    src="/premium-games/platformer/index.html"
+    src={`${import.meta.env.BASE_URL}premium-games/platformer/index.html`}
     title="⬛ Infinite Mario"
     credit={{
       name: "Infinite Mario HTML5 by Robert Kleffner (port of Notch's Infinite Mario)",

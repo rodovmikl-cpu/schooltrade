@@ -52,7 +52,7 @@ export const RunnerGame = ({ userCode, userName }: Props) => {
       <div className="relative w-full rounded-xl overflow-hidden border border-border bg-black" style={{ aspectRatio: "16 / 10", minHeight: 420 }}>
         <iframe
           ref={iframeRef}
-          src="/runner/index.html"
+          src={`${import.meta.env.BASE_URL}runner/index.html`}
           title="Metro Runner"
           className="absolute inset-0 w-full h-full"
           allow="autoplay; fullscreen"
