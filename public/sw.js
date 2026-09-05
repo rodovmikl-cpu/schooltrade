@@ -10,10 +10,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
   const title = data.title || '📰 חדשות בית הספר';
+  const faviconUrl = new URL('favicon.png', self.registration.scope).href;
   const options = {
     body: data.body || 'יש הודעה חדשה בחדשות בית הספר',
-    icon: '/favicon.png',
-    badge: '/favicon.png',
+    icon: faviconUrl,
+    badge: faviconUrl,
     vibrate: [200, 100, 200],
     dir: 'rtl',
     lang: 'he',
@@ -32,7 +33,7 @@ self.addEventListener('notificationclick', (event) => {
           return client.focus();
         }
       }
-      return clients.openWindow('/');
+      return clients.openWindow(self.registration.scope);
     })
   );
 });

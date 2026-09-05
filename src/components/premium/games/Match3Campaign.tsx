@@ -2,7 +2,7 @@ import { IframeGame } from "./IframeGame";
 
 export const Match3Campaign = () => (
   <IframeGame
-    src="/premium-games/match3/index.html"
+    src={`${import.meta.env.BASE_URL}premium-games/match3/index.html`}
     title="🧩 Match-3"
     credit={{
       name: "Match-3 Game HTML5 by Rembound",

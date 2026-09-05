@@ -2,7 +2,7 @@ import { IframeGame } from "./IframeGame";
 
 export const TowerDefense = () => (
   <IframeGame
-    src="/premium-games/td/index.html"
+    src={`${import.meta.env.BASE_URL}premium-games/td/index.html`}
     title="🧱 Tower Defense"
     credit={{
       name: "HTML5 Tower Defense by oldj",

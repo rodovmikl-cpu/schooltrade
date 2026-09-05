@@ -2,7 +2,7 @@ import { IframeGame } from "./IframeGame";
 
 export const VIPSurvival = () => (
   <IframeGame
-    src="/premium-games/arena/index.html"
+    src={`${import.meta.env.BASE_URL}premium-games/arena/index.html`}
     title="⚔️ Arena Survival"
     credit={{
       name: "canvas-vampire-survivors by ricardo-foundry",

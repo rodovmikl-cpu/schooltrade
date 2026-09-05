@@ -60,7 +60,7 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
           if (newItem.author_code !== userCode && Notification.permission === 'granted') {
             new Notification('📰 חדשות בית הספר', {
               body: 'יש הודעה חדשה בחדשות בית הספר',
-              icon: '/favicon.png',
+              icon: `${import.meta.env.BASE_URL}favicon.png`,
             });
           }
         }
@@ -79,7 +79,7 @@ export const SchoolNews = ({ userCode, userName }: SchoolNewsProps) => {
     }
     // Register service worker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch((err) => {
+      navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((err) => {
         console.error('SW registration failed:', err);
       });
     }
